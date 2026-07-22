@@ -46,10 +46,10 @@ if [[ "$VARIANT" == "release" ]]; then
     ./gradlew :app:assembleRelease
     APK="app/build/outputs/apk/release/app-release.apk"
     [[ -f "$APK" ]] || APK="app/build/outputs/apk/release/app-release-unsigned.apk"
-    if [[ -f keystore.properties || -n "${UCV_KEYSTORE_FILE:-}" ]]; then
-        echo "Signing: release keystore"
-    else
+    if [[ "$APK" == *-unsigned.apk ]]; then
         echo "Signing: UNSIGNED (create keystore.properties or set UCV_KEYSTORE_FILE)"
+    else
+        echo "Signing: release keystore"
     fi
 else
     ./gradlew :app:assembleDebug

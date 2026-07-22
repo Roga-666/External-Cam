@@ -19,7 +19,7 @@ Modern Android viewer for USB (UVC) endoscopes and borescopes. By muh.
 ## Build
 
     ./gradlew :app:assembleDebug     # debug APK
-    ./gradlew :app:assembleRelease   # minified release (configure signing first)
+    ./gradlew :app:assembleRelease   # minified release (unsigned unless signing configured)
     ./gradlew test detekt ktlintCheck lint
 
 ## Architecture
