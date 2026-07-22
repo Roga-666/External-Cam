@@ -16,6 +16,7 @@ class FakeCameraController : CameraController {
     var monitoring = false
     var permissionRequests = 0
     var closed = false
+    var stopRecordingCalls = 0
 
     var photoResult: (File) -> Result<File> = { Result.success(it.apply { writeText("jpeg") }) }
     var startRecordingResult: Result<Unit> = Result.success(Unit)
@@ -41,6 +42,8 @@ class FakeCameraController : CameraController {
         return startRecordingResult
     }
 
-    override suspend fun stopRecording(): Result<File> =
-        stopRecordingResult ?: Result.success(recordingStarts.last().first.apply { writeText("mp4") })
+    override suspend fun stopRecording(): Result<File> {
+        stopRecordingCalls++
+        return stopRecordingResult ?: Result.success(recordingStarts.last().first.apply { writeText("mp4") })
+    }
 }

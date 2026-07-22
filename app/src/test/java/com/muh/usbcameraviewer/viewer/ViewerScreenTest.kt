@@ -11,6 +11,7 @@ import com.muh.usbcameraviewer.camera.CameraUiState
 import com.muh.usbcameraviewer.camera.CaptureMode
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.ui.theme.UcvTheme
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -74,6 +75,17 @@ class ViewerScreenTest {
     fun streaming_recording_showsElapsedChip() {
         setContent(streaming.copy(captureMode = CaptureMode.VIDEO, isRecording = true, recordingSeconds = 83))
         compose.onNodeWithText("01:23").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun streaming_legacySdk_shutterWithoutStoragePermission_doesNotCaptureYet() {
+        var shutterInvoked = false
+        setContent(streaming, ViewerCallbacks(onShutter = { shutterInvoked = true }))
+        compose.onNodeWithContentDescription("Take photo").performClick()
+        // WRITE_EXTERNAL_STORAGE isn't granted in this Robolectric environment, so the click
+        // must take the permission-request path instead of invoking the shutter directly.
+        assertFalse(shutterInvoked)
     }
 
     @Test

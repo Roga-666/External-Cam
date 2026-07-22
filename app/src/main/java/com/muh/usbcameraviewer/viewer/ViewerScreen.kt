@@ -216,28 +216,38 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
     // PreviewSurface is rendered once by the caller (ViewerContent) so its identity survives
     // the Connecting -> Streaming transition; this composable only draws the control overlays.
     val context = LocalContext.current
-    val storagePermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) callbacks.onShutter() }
+
     val audioPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) callbacks.onShutter() }
-    val shutter = {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED
-        ) {
-            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        } else if (
-            state.captureMode == CaptureMode.VIDEO &&
+
+    // Re-entered after the storage grant (or immediately, if storage wasn't needed) so a
+    // storage grant falls through to the audio check instead of bypassing it.
+    fun proceedAfterStorage() {
+        val needsAudio = state.captureMode == CaptureMode.VIDEO &&
             !state.isRecording &&
             callbacks.recordAudioEnabled &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED
-        ) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+        if (needsAudio) {
             audioPermission.launch(Manifest.permission.RECORD_AUDIO)
         } else {
             callbacks.onShutter()
+        }
+    }
+
+    val storagePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) proceedAfterStorage() }
+
+    val shutter = {
+        val needsStorage = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED
+        if (needsStorage) {
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            proceedAfterStorage()
         }
     }
     Box(Modifier.fillMaxSize()) {

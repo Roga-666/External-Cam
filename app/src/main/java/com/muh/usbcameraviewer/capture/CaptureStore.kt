@@ -82,18 +82,24 @@ class MediaStoreCaptureStore @Inject constructor(
         }
         val uri = resolver.insert(collection, values)
             ?: error("MediaStore insert failed for $displayName")
-        resolver.openOutputStream(uri)?.use { out ->
-            src.inputStream().use { it.copyTo(out) }
-        } ?: error("openOutputStream failed for $uri")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            resolver.update(
-                uri,
-                ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
-                null,
-                null,
-            )
+        try {
+            resolver.openOutputStream(uri)?.use { out ->
+                src.inputStream().use { it.copyTo(out) }
+            } ?: error("openOutputStream failed for $uri")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                resolver.update(
+                    uri,
+                    ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
+                    null,
+                    null,
+                )
+            }
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw e
+        } finally {
+            src.delete()
         }
-        src.delete()
         uri.toString()
     }
 }

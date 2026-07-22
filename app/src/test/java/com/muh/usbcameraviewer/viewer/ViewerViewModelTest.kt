@@ -191,7 +191,8 @@ class ViewerViewModelTest {
 
     @Test
     fun `detach while recording stops and publishes partial file`() = runTest {
-        val vm = vm()
+        val captureStore = FakeCaptureStore(tmp.root)
+        val vm = ViewerViewModel(fake, settingsRepo(), captureStore) { error("no view in unit test") }
         fake.emit(CameraEvent.Attached("Endoscope"))
         fake.emit(CameraEvent.PermissionGranted("Endoscope"))
         fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
@@ -199,7 +200,9 @@ class ViewerViewModelTest {
         vm.onShutter() // start recording
         fake.emit(CameraEvent.Detached)
         assertEquals(CameraUiState.NoDevice, vm.state.value)
-        // stopRecording was invoked so the partial file got finalized+published
-        assertEquals(1, fake.recordingStarts.size)
+        // stopRecording was actually invoked (not just that state flipped), and the partial
+        // file was finalized+published.
+        assertEquals(1, fake.stopRecordingCalls)
+        assertTrue(captureStore.published.any { it.endsWith(".mp4") })
     }
 }

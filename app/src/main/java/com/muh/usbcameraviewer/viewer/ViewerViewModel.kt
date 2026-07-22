@@ -69,7 +69,7 @@ class ViewerViewModel @Inject constructor(
                 CameraUiState.Error(CameraError.OpenFailed(event.reason))
             CameraEvent.Detached -> {
                 val wasRecording = (_state.value as? CameraUiState.Streaming)?.isRecording == true
-                if (wasRecording) stopRecording(publish = true)
+                if (wasRecording) stopRecording()
                 _state.value = CameraUiState.NoDevice
             }
         }
@@ -123,7 +123,7 @@ class ViewerViewModel @Inject constructor(
         val s = _state.value as? CameraUiState.Streaming ?: return
         when {
             s.captureMode == CaptureMode.PHOTO -> capturePhoto()
-            s.isRecording -> stopRecording(publish = true)
+            s.isRecording -> stopRecording()
             else -> startRecording()
         }
     }
@@ -170,7 +170,7 @@ class ViewerViewModel @Inject constructor(
         }
     }
 
-    private fun stopRecording(publish: Boolean) {
+    private fun stopRecording() {
         tickerJob?.cancel()
         tickerJob = null
         viewModelScope.launch {
