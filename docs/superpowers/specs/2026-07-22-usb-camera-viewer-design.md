@@ -86,9 +86,9 @@ UI states (sealed):
 ## 5. Capture
 
 - **Photos**: JPEG via MediaStore into `Pictures/USB Camera Viewer/`.
-  Scoped storage — no storage permission required (minSdk 26 uses legacy
-  path pre-29 via MediaStore insert; still permissionless for own files
-  on 29+, WRITE_EXTERNAL_STORAGE granted-at-install for ≤28).
+  On API 29+ scoped storage — no permission needed for own collections.
+  On API 26–28, `WRITE_EXTERNAL_STORAGE` (manifest `maxSdkVersion="28"`)
+  requested at runtime before first capture.
 - **Videos**: MP4 (H.264) via AUSBC recorder into `Movies/USB Camera Viewer/`.
   Optional mic audio; requesting RECORD_AUDIO only when user enables audio.
 - Filenames: `<prefix>_yyyyMMdd_HHmmss.jpg|mp4`.
