@@ -45,5 +45,5 @@
     <path
         android:fillAlpha="0.92"
         android:fillColor="#E8F6FF"
-        android:pathData="M44,42a4.5,4.5 0 1,0 9,0a4.5,4.5 0 1,0 -9,0z" />
+        android:pathData="M44.5,47a4.5,4.5 0 1,0 9,0a4.5,4.5 0 1,0 -9,0z" />
 </vector>
