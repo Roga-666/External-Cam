@@ -63,6 +63,15 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
+    implementation(libs.ausbc) {
+        // AUSBC 3.2.7's POM drags in two extras only its demo UI uses; neither is
+        // published on the repos we allow, and no libausbc class references them.
+        exclude(group = "com.gyf.immersionbar", module = "immersionbar")
+        exclude(group = "com.zlc.glide", module = "webpdecoder")
+    }
+    // libausbc declares libuvc (com.serenegiant.usb.*) with runtime scope only, but the
+    // wrapper references USBMonitor.UsbControlBlock at compile time, so promote it to compile.
+    implementation(libs.ausbc.uvc)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -11,7 +11,7 @@ navigationCompose = "2.8.5"
 coroutines = "1.10.1"
 datastore = "1.1.1"
 coil = "2.7.0"
-ausbc = "3.3.3"
+ausbc = "3.2.7"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 turbine = "1.2.0"
@@ -41,6 +41,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-video = { group = "io.coil-kt", name = "coil-video", version.ref = "coil" }
 ausbc = { group = "com.github.jiangdongguo.AndroidUSBCamera", name = "libausbc", version.ref = "ausbc" }
+ausbc-uvc = { group = "com.github.jiangdongguo.AndroidUSBCamera", name = "libuvc", version.ref = "ausbc" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }

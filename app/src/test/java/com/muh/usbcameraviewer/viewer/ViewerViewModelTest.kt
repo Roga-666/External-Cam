@@ -34,7 +34,7 @@ class ViewerViewModelTest {
         ),
     )
 
-    private fun vm() = ViewerViewModel(fake, settingsRepo())
+    private fun vm() = ViewerViewModel(fake, settingsRepo()) { error("no view in unit test") }
 
     @Test
     fun `starts monitoring and begins in NoDevice`() = runTest {
@@ -94,7 +94,7 @@ class ViewerViewModelTest {
     @Test
     fun `selecting resolution forwards to controller and persists`() = runTest {
         val settings = settingsRepo()
-        val vm = ViewerViewModel(fake, settings)
+        val vm = ViewerViewModel(fake, settings) { error("no view in unit test") }
         fake.emit(CameraEvent.Attached("Endoscope"))
         fake.emit(CameraEvent.PermissionGranted("Endoscope"))
         fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
@@ -106,7 +106,7 @@ class ViewerViewModelTest {
     fun `preferred resolution from settings passed to open`() = runTest {
         val settings = settingsRepo()
         settings.setLastResolution(res1080)
-        val vm = ViewerViewModel(fake, settings)
+        val vm = ViewerViewModel(fake, settings) { error("no view in unit test") }
         fake.emit(CameraEvent.Attached("Endoscope"))
         fake.emit(CameraEvent.PermissionGranted("Endoscope"))
         vm.onPreviewReady(preview = "texture-view")

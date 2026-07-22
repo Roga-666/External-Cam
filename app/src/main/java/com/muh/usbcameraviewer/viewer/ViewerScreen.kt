@@ -81,8 +81,7 @@ fun ViewerScreen(
             onToggleMirror = viewModel::onToggleMirror,
             onOpenGallery = onOpenGallery,
             onOpenSettings = onOpenSettings,
-            // previewFactory intentionally left at ViewerCallbacks' default (TextureView);
-            // ViewModel gains a previewFactory in Task 6.
+            previewFactory = viewModel.previewFactory,
         ),
     )
 }

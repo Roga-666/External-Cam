@@ -6,6 +6,7 @@ import com.muh.usbcameraviewer.camera.CameraController
 import com.muh.usbcameraviewer.camera.CameraError
 import com.muh.usbcameraviewer.camera.CameraEvent
 import com.muh.usbcameraviewer.camera.CameraUiState
+import com.muh.usbcameraviewer.camera.PreviewFactory
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.settings.ResolutionPolicy
 import com.muh.usbcameraviewer.settings.SettingsRepository
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 class ViewerViewModel @Inject constructor(
     private val controller: CameraController,
     private val settingsRepository: SettingsRepository,
+    @PreviewFactory val previewFactory: @JvmSuppressWildcards (android.content.Context) -> android.view.View,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<CameraUiState>(CameraUiState.NoDevice)
