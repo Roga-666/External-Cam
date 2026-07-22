@@ -331,7 +331,7 @@ class ViewerViewModelTest {
         }
 
     @Test
-    fun `backgrounding closes camera and foregrounding re-opens against retained preview`() =
+    fun `backgrounding keeps the camera open and streaming`() =
         runTest {
             val vm = vm()
             fake.emit(CameraEvent.Attached("Endoscope"))
@@ -340,9 +340,10 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
             assertEquals(1, fake.openCalls.size)
             vm.onAppBackgrounded()
-            assertTrue(fake.closed)
-            assertEquals(CameraUiState.Connecting("Endoscope"), vm.state.value)
+            assertFalse(fake.closed)
+            assertTrue(vm.state.value is CameraUiState.Streaming)
+            // Foregrounding while still Streaming does not re-open — the camera never closed.
             vm.onAppForegrounded()
-            assertEquals(2, fake.openCalls.size)
+            assertEquals(1, fake.openCalls.size)
         }
 }

@@ -15,6 +15,7 @@ import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.ResolutionPolicy
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -63,6 +64,10 @@ class ViewerViewModel
         private val _captureFlash = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val captureFlash = _captureFlash.asSharedFlow()
 
+        /** True while a resolution switch is renegotiating the stream, so the UI can show progress. */
+        private val _switchingResolution = MutableStateFlow(false)
+        val switchingResolution: StateFlow<Boolean> = _switchingResolution.asStateFlow()
+
         val keepScreenOn: StateFlow<Boolean> =
             settingsRepository.settings
                 .map { it.keepScreenOn }
@@ -90,6 +95,10 @@ class ViewerViewModel
         }
 
         private fun onEvent(event: CameraEvent) {
+            // Any resolved open/close ends a pending resolution switch.
+            if (event is CameraEvent.Opened || event is CameraEvent.OpenFailed || event == CameraEvent.Detached) {
+                _switchingResolution.value = false
+            }
             when (event) {
                 is CameraEvent.Attached -> _state.value = CameraUiState.WaitingPermission(event.deviceName)
                 is CameraEvent.PermissionGranted -> _state.value = CameraUiState.Connecting(event.deviceName)
@@ -153,13 +162,18 @@ class ViewerViewModel
             closeAndDemote()
         }
 
-        /** App backgrounded (ON_STOP): same close+demote, but keep the retained preview for re-open. */
-        fun onAppBackgrounded() = closeAndDemote()
+        /**
+         * App backgrounded (ON_STOP). Deliberately a no-op: keep the USB camera OPEN so the stream
+         * survives transient focus loss (the USB-permission dialog, a notification, a quick app
+         * switch) instead of tearing down and forcing a reconnect. The camera is still released when
+         * the preview surface is actually disposed (navigation) or the device detaches.
+         */
+        fun onAppBackgrounded() = Unit
 
         /**
          * App foregrounded (ON_START). When the surface was NOT disposed (composition retained), the
-         * factory won't fire again, so re-open against the retained preview. If the surface was
-         * disposed and recreated, onPreviewReady handles the re-open and pendingPreview is refreshed.
+         * factory won't fire again, so re-open against the retained preview only if we had demoted to
+         * Connecting. If the surface was disposed and recreated, onPreviewReady handles the re-open.
          */
         fun onAppForegrounded() {
             val preview = pendingPreview
@@ -186,7 +200,11 @@ class ViewerViewModel
         }
 
         fun onSelectResolution(resolution: Resolution) {
-            controller.setResolution(resolution)
+            // The native stop/setSize/start renegotiates the USB stream and can take a second;
+            // run it off the main thread so the UI never freezes. Opened re-emits when it's live.
+            if (_state.value !is CameraUiState.Streaming) return
+            _switchingResolution.value = true
+            viewModelScope.launch(Dispatchers.IO) { controller.setResolution(resolution) }
             viewModelScope.launch { settingsRepository.setLastResolution(resolution) }
         }
 

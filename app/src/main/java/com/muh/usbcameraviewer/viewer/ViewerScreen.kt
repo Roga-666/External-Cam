@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -106,6 +107,7 @@ fun ViewerScreen(
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val autoShowResolutionPicker by viewModel.autoShowResolutionPicker.collectAsStateWithLifecycle()
     val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
+    val switchingResolution by viewModel.switchingResolution.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -141,7 +143,7 @@ fun ViewerScreen(
         onDispose { view.keepScreenOn = false }
     }
 
-    // Spec §6: release the native camera while backgrounded, re-open on return.
+    // Keep the camera alive across transient backgrounding; only re-open if it had been demoted.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer =
@@ -184,6 +186,9 @@ fun ViewerScreen(
                     .background(Color.White.copy(alpha = captureFlash.value)),
             )
         }
+        if (switchingResolution) {
+            CircularProgressIndicator(Modifier.align(Alignment.Center))
+        }
         // Float above the bottom camera controls (shutter row) rather than over them.
         SnackbarHost(
             snackbar,
@@ -211,9 +216,15 @@ fun ViewerContent(
     ) {
         // Single call site: the preview surface must survive the Connecting -> Streaming
         // transition unchanged, otherwise Compose disposes/recreates the AndroidView and
-        // controller.open() gets invoked twice against a dead view.
+        // controller.open() gets invoked twice against a dead view. Sized to the stream's
+        // aspect ratio (centered, letterboxed) so the picture is never stretched.
         if (state is CameraUiState.Connecting || state is CameraUiState.Streaming) {
-            PreviewSurface(callbacks)
+            val aspect =
+                (state as? CameraUiState.Streaming)
+                    ?.resolution
+                    ?.takeIf { it.width > 0 && it.height > 0 }
+                    ?.let { it.width.toFloat() / it.height }
+            PreviewSurface(callbacks, aspect)
         }
         when (state) {
             CameraUiState.NoDevice ->
@@ -307,17 +318,28 @@ private fun CenteredMessage(
 }
 
 @Composable
-private fun PreviewSurface(callbacks: ViewerCallbacks) {
+private fun BoxScope.PreviewSurface(
+    callbacks: ViewerCallbacks,
+    aspectRatio: Float?,
+) {
     // onDispose fires when the surface leaves composition (navigating to the gallery), so the
     // ViewModel can close the native camera and demote to Connecting for a clean re-open on return.
     DisposableEffect(Unit) {
         onDispose { callbacks.onPreviewDisposed() }
     }
+    // Match the stream's aspect ratio, centered, so the picture is not stretched. Until the first
+    // resolution is known (aspectRatio null) fill the area to avoid a zero-size surface.
+    val sizeModifier =
+        if (aspectRatio != null) {
+            Modifier.aspectRatio(aspectRatio).align(Alignment.Center)
+        } else {
+            Modifier.fillMaxSize()
+        }
     AndroidView(
         factory = { context ->
             callbacks.previewFactory(context).also(callbacks.onPreviewReady)
         },
-        modifier = Modifier.fillMaxSize(),
+        modifier = sizeModifier,
     )
 }
 
