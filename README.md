@@ -1,72 +1,82 @@
-# USB Camera Viewer
+<p align="center">
+  <img src="docs/assets/logo.svg" width="128" alt="USB Camera Viewer logo">
+</p>
 
-Modern Android viewer for USB (UVC) endoscopes and borescopes. By muh.
+<h1 align="center">USB Camera Viewer</h1>
+
+<p align="center">
+  Live view, capture, and browse USB (UVC) endoscopes and borescopes on Android — fully offline.
+  <br><em>by muh</em>
+</p>
+
+<!-- Update muh/usbcameraviewer below after pushing this repo to GitHub. -->
+<p align="center">
+  <a href="https://github.com/muh/usbcameraviewer/actions/workflows/release.yml"><img src="https://github.com/muh/usbcameraviewer/actions/workflows/release.yml/badge.svg" alt="Release CI"></a>
+  <a href="https://github.com/muh/usbcameraviewer/releases/latest"><img src="https://img.shields.io/github/v/release/muh/usbcameraviewer" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/API-26%2B-brightgreen.svg" alt="API 26+">
+  <img src="https://img.shields.io/badge/Kotlin-2.1-purple.svg" alt="Kotlin 2.1">
+</p>
 
 ## Features
 
-- Live preview over USB-C OTG — auto-launches when a camera is plugged in
-- Photo capture and MP4 video recording
-- In-app gallery: zoomable viewer, share, delete
-- Resolution picker, rotate/mirror, recording timer
-- Dark, camera-first UI (Jetpack Compose, Material 3)
-- Fully offline — no INTERNET permission, no analytics
+- **Live preview** over USB-C OTG — the app offers to open automatically when a UVC camera is plugged in, and recovers from unplug/replug without a restart
+- **Photo capture & MP4 video recording** with a recording timer and low-storage guard
+- **In-app gallery** — grid with video badges, pinch-zoom viewer, share, delete
+- **Resolution picker, rotate & mirror** (preview transforms), keep-screen-on
+- **Dark, camera-first UI** — Jetpack Compose + Material 3, edge-to-edge
+- **Fully offline** — no INTERNET permission, no analytics, no ads
 
-## Requirements
+## Screenshots
 
-- Android 8.0+ (API 26), phone with USB host (OTG) support
-- A UVC-class USB camera (most cheap endoscopes are UVC)
+<!-- Fill these after the on-device hardware pass: drop PNGs into docs/assets/screenshots/ -->
+| Viewer | Gallery | Settings |
+|---|---|---|
+| _coming soon_ | _coming soon_ | _coming soon_ |
 
-## Build
+## Getting started
 
-    ./gradlew :app:assembleDebug     # debug APK
-    ./gradlew :app:assembleRelease   # minified release (unsigned unless signing configured)
-    ./gradlew test detekt ktlintCheck lint
+**You need:** an Android 8.0+ (API 26) phone with USB host (OTG) support, and a UVC-class USB camera — most inexpensive USB endoscopes/borescopes are UVC.
 
-## Architecture
+**Install** — either grab `usb-camera-viewer-<tag>.apk` from the
+[latest release](https://github.com/muh/usbcameraviewer/releases/latest), or build it yourself:
 
-Single-module MVVM. Compose UI ← StateFlow ← ViewModels; all UVC access
-behind `CameraController` (implemented by `AusbcCameraController`, using
-[AUSBC] `libausbc` **3.2.7**). Captures publish to MediaStore
-(`Pictures/USB Camera Viewer`, `Movies/USB Camera Viewer`).
-See `docs/superpowers/specs/` for the design spec and
-`docs/hardware-test-checklist.md` for the manual test pass.
+    ./build.sh debug --install
 
-[AUSBC]: https://github.com/jiangdongguo/AndroidUSBCamera
+**First run:** plug the camera into the phone (USB-C, or via an OTG adapter) → Android asks to open USB Camera Viewer → tap Allow on the USB permission dialog → live picture.
 
-### Why 3.2.7, not the newer 3.3.x
+## Usage
 
-`libausbc:3.3.3`'s libuvc/libnative artifacts don't publish cleanly on
-JitPack, so the app is pinned to `libausbc:3.2.7` — the newest release whose
-full module set actually resolves. The 3.2.7 API differs from newer
-releases in a few places that matter here: `USBMonitor` and friends live in
-`com.serenegiant.*` (not `com.jiangdg.usb.*`), there's no `CameraUVC`
-subclass (`MultiCameraClient.Camera` is used directly), and
-`CameraRequest.Builder` only exposes preview dimensions plus AF/AE flags —
-see the doc comment on `AusbcCameraController` for the full list. Two
-demo-only transitive dependencies pulled in by `libausbc` (`immersionbar`
-and `webpdecoder`) are excluded in `app/build.gradle.kts` since neither is
-published on the repos this project allows and no app code references them.
+- **Viewer** — shutter button takes a photo; toggle to video mode to record (timer chip shows elapsed time). Resolution chip opens the mode picker; rotate cycles 90° steps; mirror flips the preview.
+- **Gallery** — tap the thumbnail shortcut. Pinch to zoom photos, tap play on videos (opens your system player), share or delete from the top bar.
+- **Settings** — startup resolution policy, video quality, filename prefix, keep-screen-on, open-source licenses.
 
-## Releases
+## Troubleshooting
 
-Local build:
+| Problem | Check |
+|---|---|
+| "Plug in your camera" never changes | Phone must support USB host/OTG (the app tells you if it doesn't). Try a data-capable cable/adapter, not charge-only. |
+| No permission dialog after replug | Unplug, wait a second, replug; or tap **Grant permission** on the permission screen. |
+| Camera opens but no picture | Some non-UVC cameras enumerate but aren't supported — verify the camera is UVC-class. |
+| Videos have no sound | By design — see Known limitations. |
+
+## Build & development
 
     ./build.sh debug              # debug APK
     ./build.sh release            # release APK (signed if keystore configured)
     ./build.sh release --gates    # run test/detekt/ktlint/lint first
     ./build.sh debug --install    # build + adb install
 
-Release signing (optional — builds are unsigned without it): create
-`keystore.properties` at the repo root (git-ignored):
+Quality gates: `./gradlew test detekt ktlintCheck lint`.
+
+**Release signing** (optional — builds are unsigned without it): create `keystore.properties` at the repo root (git-ignored):
 
     storeFile=/path/to/release.jks
     storePassword=...
     keyAlias=...
     keyPassword=...
 
-CI: pushing a tag matching `v*` (e.g. `git tag v1.0.0 && git push origin v1.0.0`)
-runs quality gates and attaches `usb-camera-viewer-<tag>.apk` to a GitHub
-Release. To get a *signed* CI APK, add repository secrets:
+**CI releases:** pushing a tag matching `v*` (e.g. `git tag v1.0.0 && git push origin v1.0.0`) runs the quality gates and attaches `usb-camera-viewer-<tag>.apk` to a GitHub Release. For a *signed* CI APK add repository secrets:
 
 | Secret | Value |
 |---|---|
@@ -76,45 +86,40 @@ Release. To get a *signed* CI APK, add repository secrets:
 | `KEY_PASSWORD` | key password |
 
 Without secrets the workflow still succeeds and attaches an unsigned APK.
-A 512 px Play Store icon export is not generated (vector-only sources);
-render `ic_launcher_foreground`/`_background` at 512 px when needed.
 
-## Known limitations
+## Architecture
 
-- **Recording is video-only.** AUSBC 3.2.7's `captureVideoStart` takes no
-  audio toggle and no bit-rate parameter, so the Settings screen's "record
-  audio" switch and video-quality picker have no effect on the actual
-  recording — the app logs a warning (`AusbcCameraController`) and records
-  video with no audio track at the library's default bit rate. Wiring these
-  up will need a newer AUSBC release (or a custom encoder path).
-- **Rotate/mirror only affect the live preview, not captures.** 3.2.7 has no
-  render-side rotation or flip, so `setRotation`/`setMirror` transform the
-  preview `View` itself (rotation/scaleX). Captured photos and videos are
-  saved unrotated and unmirrored regardless of the on-screen preview
-  orientation.
-- UVC camera controls (brightness/focus) are not exposed yet (v2).
-- **Single device only.** The first attached UVC device wins; there is no
-  device chooser, so with multiple cameras connected the app streams whichever
-  one the system reports first.
-- **No shutter flash animation.** There is no screen flash on capture; the
-  updated gallery thumbnail in the bottom-left corner is the capture feedback.
-- **Microphone permission is no longer requested.** Recording is video-only
-  (see above), so the app declares no `RECORD_AUDIO` permission and never
-  prompts for the microphone.
+Single-module MVVM. Compose UI observes `StateFlow` from ViewModels; all UVC access is isolated behind a `CameraController` interface.
 
-## Quality gates
+```mermaid
+flowchart LR
+    UI["Compose UI\n(Viewer / Gallery / Settings)"] --> VM["ViewModels\n(StateFlow)"]
+    VM --> CC["CameraController\n(interface)"]
+    CC --> AC["AusbcCameraController"]
+    AC --> LIB["libausbc 3.2.7\n(libusb / libuvc JNI)"]
+    VM --> CS["CaptureStore"] --> MS[("MediaStore\nPictures/ & Movies/\nUSB Camera Viewer")]
+    VM --> MR["MediaRepository"] --> MS
+    VM --> DS[("DataStore\nsettings")]
+```
 
-`detekt` and `ktlint` are configured with a small set of documented,
-narrowly-scoped suppressions (Compose naming conventions, a few
-project-specific thresholds) rather than broad rule disables — see
-`config/detekt/detekt.yml`, `.editorconfig`, and inline `@Suppress`
-annotations for the reasoning at each site.
+`libausbc` is pinned to **3.2.7** — newer 3.3.x artifacts are broken on JitPack (missing transitive AARs). Only `AusbcCameraController` touches the library, so it can be swapped without touching features. Package map: `camera/` (UVC), `capture/` (files + MediaStore), `viewer/`, `gallery/`, `settings/`, `navigation/`, `ui/theme/`.
 
 ## Hardware testing
 
-This repo's automated suite is unit/Robolectric tests only — there is no
-instrumented (on-device) test in CI. Before every release, run the manual
-pass in `docs/hardware-test-checklist.md` on a physical phone with a real
-UVC camera; it has not yet been run end-to-end against hardware as part of
-this project's task series (no device was available), so treat it as a
-template to fill in, not a completed report.
+Unit tests fake the camera; real UVC behavior needs a device. Run [docs/hardware-test-checklist.md](docs/hardware-test-checklist.md) on a physical phone with an endoscope before shipping a release — the checklist in this repo is an unrun template until then.
+
+## Known limitations
+
+- **Video records without audio** — the pinned camera library's recorder has no audio/bitrate support; the app records video-only and never requests the microphone permission.
+- **Rotate/mirror affect the preview only** — captured photos/videos keep the sensor orientation.
+- **Single camera** — with multiple UVC devices attached, only the most recently attached one is used; there is no chooser.
+- **No shutter flash animation** — the gallery thumbnail update is the capture feedback.
+- A 512 px Play Store icon export is not generated (vector-only sources); render the launcher vectors at 512 px when needed.
+
+## Contributing
+
+PRs welcome once the repo is public: keep `./gradlew test detekt ktlintCheck lint` green, follow conventional commits, and note any hardware you verified against.
+
+## License
+
+[MIT](LICENSE) © 2026 muh. Bundled third-party components (AUSBC — Apache-2.0, libuvc — BSD-3-Clause, libusb — LGPL-2.1, Coil, AndroidX, Kotlin — Apache-2.0) are listed with full texts in-app under **Settings → Open-source licenses**.
