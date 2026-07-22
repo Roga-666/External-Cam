@@ -1,5 +1,6 @@
 package com.muh.usbcameraviewer.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +45,7 @@ import com.muh.usbcameraviewer.R
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onOpenLicenses: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -99,8 +101,10 @@ fun SettingsScreen(
 
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_record_audio)) },
+                supportingContent = { Text(stringResource(R.string.settings_record_audio_unavailable)) },
                 trailingContent = {
-                    Switch(checked = settings.recordAudio, onCheckedChange = viewModel::setRecordAudio)
+                    // Disabled: AUSBC 3.2.7 records video-only, so the toggle cannot take effect.
+                    Switch(checked = settings.recordAudio, onCheckedChange = viewModel::setRecordAudio, enabled = false)
                 },
             )
             ListItem(
@@ -133,6 +137,10 @@ fun SettingsScreen(
                 stringResource(R.string.settings_about_body, BuildConfig.VERSION_NAME),
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.bodyMedium,
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_licenses)) },
+                modifier = Modifier.clickable(onClick = onOpenLicenses),
             )
         }
     }
