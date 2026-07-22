@@ -47,6 +47,38 @@ demo-only transitive dependencies pulled in by `libausbc` (`immersionbar`
 and `webpdecoder`) are excluded in `app/build.gradle.kts` since neither is
 published on the repos this project allows and no app code references them.
 
+## Releases
+
+Local build:
+
+    ./build.sh debug              # debug APK
+    ./build.sh release            # release APK (signed if keystore configured)
+    ./build.sh release --gates    # run test/detekt/ktlint/lint first
+    ./build.sh debug --install    # build + adb install
+
+Release signing (optional — builds are unsigned without it): create
+`keystore.properties` at the repo root (git-ignored):
+
+    storeFile=/path/to/release.jks
+    storePassword=...
+    keyAlias=...
+    keyPassword=...
+
+CI: pushing a tag matching `v*` (e.g. `git tag v1.0.0 && git push origin v1.0.0`)
+runs quality gates and attaches `usb-camera-viewer-<tag>.apk` to a GitHub
+Release. To get a *signed* CI APK, add repository secrets:
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_B64` | `base64 -w0 release.jks` |
+| `KEYSTORE_PASSWORD` | keystore password |
+| `KEY_ALIAS` | key alias |
+| `KEY_PASSWORD` | key password |
+
+Without secrets the workflow still succeeds and attaches an unsigned APK.
+A 512 px Play Store icon export is not generated (vector-only sources);
+render `ic_launcher_foreground`/`_background` at 512 px when needed.
+
 ## Known limitations
 
 - **Recording is video-only.** AUSBC 3.2.7's `captureVideoStart` takes no
