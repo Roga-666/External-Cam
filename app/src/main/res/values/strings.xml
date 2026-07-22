@@ -20,4 +20,14 @@
     <string name="cd_open_gallery">Open gallery</string>
     <string name="cd_open_settings">Open settings</string>
     <string name="cd_pick_resolution">Choose resolution</string>
+    <string name="gallery_title">Gallery</string>
+    <string name="gallery_empty">No captures yet. Photos and videos you take appear here.</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_share">Share</string>
+    <string name="cd_delete">Delete</string>
+    <string name="cd_video_badge">Video</string>
+    <string name="delete_confirm_title">Delete capture?</string>
+    <string name="delete_confirm_body">%1$s will be removed permanently.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
 </resources>
