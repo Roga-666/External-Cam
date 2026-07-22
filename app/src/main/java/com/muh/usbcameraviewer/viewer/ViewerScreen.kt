@@ -1,3 +1,7 @@
+// ViewerCallbacks is intentionally kept in this file alongside the ViewerScreen it configures,
+// rather than split into its own file, since the two are never used independently.
+@file:Suppress("MatchingDeclarationName")
+
 package com.muh.usbcameraviewer.viewer
 
 import android.Manifest
@@ -419,4 +423,7 @@ private fun StreamingContent(
     }
 }
 
-internal fun formatElapsed(seconds: Long): String = "%02d:%02d".format(seconds / 60, seconds % 60)
+private const val SECONDS_PER_MINUTE = 60
+
+internal fun formatElapsed(seconds: Long): String =
+    "%02d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)

@@ -30,6 +30,10 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import javax.inject.Inject
 
+private const val ROTATION_STEP_DEGREES = 90
+private const val FULL_ROTATION_DEGREES = 360
+private const val RECORDING_TICK_MS = 1_000L
+
 @HiltViewModel
 class ViewerViewModel
     @Inject
@@ -116,7 +120,7 @@ class ViewerViewModel
 
         fun onRotate() {
             val s = _state.value as? CameraUiState.Streaming ?: return
-            val degrees = (s.rotationDegrees + 90) % 360
+            val degrees = (s.rotationDegrees + ROTATION_STEP_DEGREES) % FULL_ROTATION_DEGREES
             controller.setRotation(degrees)
             _state.value = s.copy(rotationDegrees = degrees)
         }
@@ -175,7 +179,7 @@ class ViewerViewModel
                     tickerJob =
                         viewModelScope.launch {
                             while (true) {
-                                delay(1_000)
+                                delay(RECORDING_TICK_MS)
                                 _state.update { s ->
                                     if (s is CameraUiState.Streaming && s.isRecording) {
                                         s.copy(recordingSeconds = s.recordingSeconds + 1)

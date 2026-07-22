@@ -6,6 +6,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+// ARGB literals for a color palette; naming each (e.g. "SKY_BLUE_7FD0FF") would just restate
+// the hex value without adding readability, so the whole declaration is suppressed rather than
+// each of the 14 individual literals.
+@Suppress("MagicNumber")
 private val DarkColors =
     darkColorScheme(
         primary = Color(0xFF7FD0FF),

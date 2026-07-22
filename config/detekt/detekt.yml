@@ -9,22 +9,21 @@ naming:
     # lower-camel-case function naming.
     ignoreAnnotated: ['Composable']
   MatchingDeclarationName:
-    active: false
-    # Several files intentionally group a small top-level support type next to
-    # the composable/feature it belongs to (ViewerScreen.kt: ViewerScreen +
-    # ViewerCallbacks; AppNav.kt: AppNav + Routes) rather than splitting into
-    # one-declaration-per-file, which would scatter closely related code.
+    active: true
+    # Re-enabled project-wide (see fix-report in task-11-report.md); the two
+    # files that intentionally group a top-level support type next to the
+    # composable/feature it belongs to (ViewerScreen.kt, AppNav.kt) carry
+    # their own file-level @file:Suppress with a one-line reason instead of a
+    # blanket disable here.
 
 style:
   MagicNumber:
-    active: false
-    # Disabled project-wide: this is a UI-heavy Compose app where the flagged
-    # literals are Compose dp/sp sizes, ARGB color constants (Theme.kt), UVC
-    # resolutions/bitrates (AppSettings, AusbcCameraController) and time-format
-    # divisors (formatElapsed). Naming each as a constant (e.g. "ELEVEN" for a
-    # dp size) would add indirection without adding readability, which is the
-    # documented rationale detekt itself gives for treating MagicNumber as
-    # high-noise/opt-in on UI codebases.
+    active: true
+    # Re-enabled project-wide (see fix-report in task-11-report.md).
+    # Composable-annotated functions are exempted: they're where the bulk of
+    # the noise lived (Compose dp/sp sizes). Non-Compose offenders are fixed
+    # with named constants, or suppressed individually with a reason.
+    ignoreAnnotated: ['Composable']
 
 complexity:
   TooManyFunctions:

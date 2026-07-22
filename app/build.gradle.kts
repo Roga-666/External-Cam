@@ -112,8 +112,11 @@ dependencies {
 // host activity, so any test using createComposeRule() (ViewerScreenTest) fails under
 // testReleaseUnitTest with "Unable to resolve activity for ... ComponentActivity" — not a
 // real regression, just the release variant lacking a manifest entry it's not supposed to
-// have. testReleaseUnitTest would re-run the exact same JVM unit tests against R8-minified
-// release classes anyway, which unit tests aren't meant to validate; the release build is
-// otherwise exercised by :app:assembleRelease. Skip it so `./gradlew test` reflects the one
-// unit test run that's meaningful here (testDebugUnitTest).
-tasks.matching { it.name == "testReleaseUnitTest" }.configureEach { enabled = false }
+// have. Exclude only that Compose-UI-test class; every other unit test (Filenames, Settings,
+// ViewerViewModel, GalleryViewModel, ...) still runs against the release/minified classes.
+tasks.withType<Test>().matching { it.name == "testReleaseUnitTest" }.configureEach {
+    filter {
+        excludeTestsMatching("com.muh.usbcameraviewer.viewer.ViewerScreenTest")
+        isFailOnNoMatchingTests = false
+    }
+}

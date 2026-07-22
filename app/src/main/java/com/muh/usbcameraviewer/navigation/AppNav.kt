@@ -1,3 +1,7 @@
+// Routes is intentionally kept in this file alongside the AppNav graph that uses it, rather
+// than split into its own file, since the two are never used independently.
+@file:Suppress("MatchingDeclarationName")
+
 package com.muh.usbcameraviewer.navigation
 
 import androidx.compose.runtime.Composable

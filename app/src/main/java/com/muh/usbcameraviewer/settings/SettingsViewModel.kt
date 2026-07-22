@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val STOP_TIMEOUT_MS = 5_000L
+
 @HiltViewModel
 class SettingsViewModel
     @Inject
@@ -17,7 +19,7 @@ class SettingsViewModel
     ) : ViewModel() {
         val settings: StateFlow<AppSettings> =
             repository.settings
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppSettings())
 
         fun setResolutionPolicy(v: ResolutionPolicy) = viewModelScope.launch { repository.setResolutionPolicy(v) }
 

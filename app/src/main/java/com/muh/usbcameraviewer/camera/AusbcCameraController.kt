@@ -175,8 +175,8 @@ class AusbcCameraController
             // there is no setRenderMode/setAspectRatioShow/setRawPreviewData as in the 3.3.x brief.
             val request =
                 CameraRequest.Builder()
-                    .setPreviewWidth(preferred?.width ?: 1280)
-                    .setPreviewHeight(preferred?.height ?: 720)
+                    .setPreviewWidth(preferred?.width ?: DEFAULT_PREVIEW_WIDTH)
+                    .setPreviewHeight(preferred?.height ?: DEFAULT_PREVIEW_HEIGHT)
                     .create()
             cam.openCamera(view, request)
             camera = cam
@@ -290,5 +290,7 @@ class AusbcCameraController
 
         private companion object {
             const val TAG = "AusbcCameraController"
+            const val DEFAULT_PREVIEW_WIDTH = 1280
+            const val DEFAULT_PREVIEW_HEIGHT = 720
         }
     }
