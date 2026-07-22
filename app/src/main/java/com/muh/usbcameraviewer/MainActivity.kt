@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.Text
+import com.muh.usbcameraviewer.navigation.AppNav
 import com.muh.usbcameraviewer.ui.theme.UcvTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             UcvTheme {
-                Text("USB Camera Viewer") // replaced by AppNav in Task 5
+                AppNav()
             }
         }
     }

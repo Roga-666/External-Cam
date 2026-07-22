@@ -1,3 +1,23 @@
 <resources>
     <string name="app_name">USB Camera Viewer</string>
+    <string name="no_device_title">Plug in your camera</string>
+    <string name="no_device_body">Connect a USB endoscope with a USB-C (OTG) adapter. The app starts automatically when a camera is detected.</string>
+    <string name="permission_needed_title">USB permission needed</string>
+    <string name="permission_needed_body">Allow access to %1$s to see its video.</string>
+    <string name="grant_permission">Grant permission</string>
+    <string name="connecting_to">Connecting to %1$s…</string>
+    <string name="error_open_failed">Could not open the camera.</string>
+    <string name="error_no_usb_host">This phone does not support USB OTG host mode.</string>
+    <string name="error_unsupported_device">This USB device is not a supported UVC camera.</string>
+    <string name="error_recording_failed">Recording failed: %1$s</string>
+    <string name="retry">Retry</string>
+    <string name="cd_shutter">Take photo</string>
+    <string name="cd_record_start">Start recording</string>
+    <string name="cd_record_stop">Stop recording</string>
+    <string name="cd_toggle_mode">Switch photo/video mode</string>
+    <string name="cd_rotate">Rotate preview</string>
+    <string name="cd_mirror">Mirror preview</string>
+    <string name="cd_open_gallery">Open gallery</string>
+    <string name="cd_open_settings">Open settings</string>
+    <string name="cd_pick_resolution">Choose resolution</string>
 </resources>
