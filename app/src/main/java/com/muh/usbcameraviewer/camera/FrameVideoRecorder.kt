@@ -181,7 +181,6 @@ class FrameVideoRecorder(
         audioCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         audioCodec.start()
         record.startRecording()
-        val startNanos = System.nanoTime()
 
         val info = MediaCodec.BufferInfo()
         val pcm = ByteArray(AUDIO_READ_BYTES)
@@ -193,14 +192,16 @@ class FrameVideoRecorder(
                 val buffer = audioCodec.getInputBuffer(inIndex)!!
                 buffer.clear()
                 buffer.put(pcm, 0, read)
-                val pts = (System.nanoTime() - startNanos) / MICROS_DIVISOR
+                // Absolute nanoTime base to match the video encoder's Surface-input timestamps,
+                // so the muxer computes a correct duration instead of a huge A/V-skewed one.
+                val pts = System.nanoTime() / MICROS_DIVISOR
                 audioCodec.queueInputBuffer(inIndex, 0, read, pts, 0)
             }
             drainAudio(audioCodec, info)
         }
         val inIndex = audioCodec.dequeueInputBuffer(END_OF_STREAM_TIMEOUT_US)
         if (inIndex >= 0) {
-            val pts = (System.nanoTime() - startNanos) / MICROS_DIVISOR
+            val pts = System.nanoTime() / MICROS_DIVISOR
             audioCodec.queueInputBuffer(inIndex, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
         }
         drainAudio(audioCodec, info)

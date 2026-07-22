@@ -120,7 +120,6 @@ class AusbcCameraController
                         }
 
                         override fun onDetachDec(device: UsbDevice?) {
-                            android.util.Log.d("UCVDBG", "onDetachDec pendingReopen=$pendingReopen")
                             if (device == pendingDevice) {
                                 teardownCamera()
                                 // Device is truly gone: the control block is now stale.
@@ -243,7 +242,6 @@ class AusbcCameraController
                                 // close/open race that crashes updateResolution and eager reopen.
                                 val reopen = pendingReopen
                                 val reopenView = previewView
-                                android.util.Log.d("UCVDBG", "CLOSED reopen=$reopen view=${reopenView != null}")
                                 if (reopen != null && reopenView != null) {
                                     pendingReopen = null
                                     reopenView.post { openInternal(reopenView, reopen) }

@@ -59,6 +59,10 @@ class ViewerViewModel
         private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
         val messages = _messages.asSharedFlow()
 
+        /** Emitted when a photo is captured, so the UI can flash + buzz (esp. the hardware button). */
+        private val _captureFlash = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val captureFlash = _captureFlash.asSharedFlow()
+
         val keepScreenOn: StateFlow<Boolean> =
             settingsRepository.settings
                 .map { it.keepScreenOn }
@@ -223,6 +227,7 @@ class ViewerViewModel
                 controller.capturePhoto(captureStore.tempFile(name))
                     .mapCatching { captureStore.publishPhoto(it, name) }
                     .onSuccess { uri ->
+                        _captureFlash.tryEmit(Unit)
                         _state.update { s ->
                             if (s is CameraUiState.Streaming) s.copy(lastCaptureUri = uri) else s
                         }

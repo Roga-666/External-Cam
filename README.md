@@ -21,11 +21,12 @@
 ## Features
 
 - **Live preview** over USB-C OTG — the app offers to open automatically when a UVC camera is plugged in, and recovers from unplug/replug without a restart
-- **Photo capture & MP4 video recording** with a recording timer and low-storage guard
+- **Photo capture & MP4 video recording** (optional microphone audio) with a recording timer, capture flash + haptic feedback, and a low-storage guard
+- **Hardware shutter button** — the physical button on the endoscope takes a photo
 - **In-app gallery** — grid with video badges, pinch-zoom viewer, share, delete
 - **Resolution picker, rotate & mirror** (preview transforms), keep-screen-on
 - **Dark, camera-first UI** — Jetpack Compose + Material 3, edge-to-edge
-- **Fully offline** — no INTERNET permission, no analytics, no ads (the one runtime permission is Camera, which Android mandates for USB video devices)
+- **Fully offline** — no INTERNET permission, no analytics, no ads (runtime permissions are Camera — which Android mandates for USB video — and, only if you enable audio, the microphone)
 
 ## Screenshots
 
@@ -118,10 +119,10 @@ Unit tests fake the camera; real UVC behavior needs a device. Run [docs/hardware
 
 ## Known limitations
 
-- **Video records without audio** — the pinned camera library's recorder has no audio/bitrate support; the app records video-only and never requests the microphone permission.
+- **Capture is frame-based** — the pinned camera library's own photo/video writers require `WRITE_EXTERNAL_STORAGE` (ungrantable on Android 13+), so photos and videos are encoded from the preview frames (TextureView bitmap → JPEG; MediaCodec H.264 + optional AAC audio → MediaMuxer). Recording follows the current preview resolution.
+- **Effective resolution depends on the camera** — the picker lists the sizes the device advertises, but some cheap endoscopes negotiate a fixed stream (often 640×480) regardless; selecting another size restarts the stream but the device may keep its own.
 - **Rotate/mirror affect the preview only** — captured photos/videos keep the sensor orientation.
 - **Single camera** — with multiple UVC devices attached, only the most recently attached one is used; there is no chooser.
-- **No shutter flash animation** — the gallery thumbnail update is the capture feedback.
 - A 512 px Play Store icon export is not generated (vector-only sources); render the launcher vectors at 512 px when needed.
 
 ## Contributing

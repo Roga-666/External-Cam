@@ -10,6 +10,8 @@ import android.os.Build
 import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,7 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -104,6 +108,18 @@ fun ViewerScreen(
     val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+
+    // Capture feedback: a brief white flash + haptic buzz, so a photo (especially one taken with
+    // the hardware button) is clearly acknowledged.
+    val captureFlash = remember { Animatable(0f) }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(Unit) {
+        viewModel.captureFlash.collect {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            captureFlash.snapTo(FLASH_PEAK_ALPHA)
+            captureFlash.animateTo(0f, tween(FLASH_FADE_MS))
+        }
+    }
 
     // Android gates USB Video Class access behind the CAMERA runtime permission.
     // Request it up front so a device attach can complete its USB-permission grant.
@@ -161,6 +177,13 @@ fun ViewerScreen(
                     previewFactory = viewModel.previewFactory,
                 ),
         )
+        if (captureFlash.value > 0f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = captureFlash.value)),
+            )
+        }
         // Float above the bottom camera controls (shutter row) rather than over them.
         SnackbarHost(
             snackbar,
@@ -171,6 +194,9 @@ fun ViewerScreen(
         )
     }
 }
+
+private const val FLASH_PEAK_ALPHA = 0.75f
+private const val FLASH_FADE_MS = 320
 
 @Composable
 fun ViewerContent(
