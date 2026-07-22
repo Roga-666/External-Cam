@@ -143,7 +143,11 @@ class AusbcCameraController
                             device: UsbDevice?,
                             ctrlBlock: USBMonitor.UsbControlBlock?,
                         ) {
-                            android.util.Log.d("UCVDBG", "onDisConnectDec pendingReopen=$pendingReopen")
+                            // closeCamera() fires this before the CLOSED state callback. During a
+                            // resolution change that is NOT a real unplug — keep the preview view
+                            // and USB control block so the CLOSED handler can re-open at the new
+                            // size. Only a genuine disconnect (no pending reopen) tears down.
+                            if (pendingReopen != null) return
                             teardownCamera()
                             // Device disconnected: drop the stale control block.
                             this@AusbcCameraController.ctrlBlock = null
