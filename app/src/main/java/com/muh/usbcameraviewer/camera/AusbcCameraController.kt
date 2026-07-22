@@ -85,10 +85,9 @@ class AusbcCameraController
         // preview TextureView (getBitmap) and encode photos/videos ourselves, via MediaStore.
         @Volatile private var currentSize: Resolution = Resolution(DEFAULT_PREVIEW_WIDTH, DEFAULT_PREVIEW_HEIGHT)
 
-        @Volatile private var videoRecorder: FrameVideoRecorder? = null
+        @Volatile private var availableSizes: List<Resolution> = emptyList()
 
-        // Set by setResolution so the CLOSED callback re-opens at the new size.
-        @Volatile private var pendingReopen: Resolution? = null
+        @Volatile private var videoRecorder: FrameVideoRecorder? = null
 
         private fun UsbDevice.displayName(): String = productName?.takeIf { it.isNotBlank() } ?: "USB Camera"
 
@@ -142,11 +141,6 @@ class AusbcCameraController
                             device: UsbDevice?,
                             ctrlBlock: USBMonitor.UsbControlBlock?,
                         ) {
-                            // closeCamera() fires this before the CLOSED state callback. During a
-                            // resolution change that is NOT a real unplug — keep the preview view
-                            // and USB control block so the CLOSED handler can re-open at the new
-                            // size. Only a genuine disconnect (no pending reopen) tears down.
-                            if (pendingReopen != null) return
                             teardownCamera()
                             // Device disconnected: drop the stale control block.
                             this@AusbcCameraController.ctrlBlock = null
@@ -230,23 +224,13 @@ class AusbcCameraController
                                         ?: sizes.firstOrNull()
                                         ?: Resolution(0, 0)
                                 currentSize = current
+                                availableSizes = sizes
                                 attachButtonCallback(cam)
                                 _events.tryEmit(
                                     CameraEvent.Opened(device.displayName(), current, sizes),
                                 )
                             }
-                            ICameraStateCallBack.State.CLOSED -> {
-                                // A resolution change closes the camera, then re-opens here once
-                                // teardown is complete. Re-opening on the same still-attached
-                                // TextureView (whose SurfaceTexture stays valid) avoids the
-                                // close/open race that crashes updateResolution and eager reopen.
-                                val reopen = pendingReopen
-                                val reopenView = previewView
-                                if (reopen != null && reopenView != null) {
-                                    pendingReopen = null
-                                    reopenView.post { openInternal(reopenView, reopen) }
-                                }
-                            }
+                            ICameraStateCallBack.State.CLOSED -> Unit
                             ICameraStateCallBack.State.ERROR ->
                                 _events.tryEmit(CameraEvent.OpenFailed(msg ?: "camera error"))
                         }
@@ -264,10 +248,7 @@ class AusbcCameraController
             camera = cam
         }
 
-        override fun close() {
-            pendingReopen = null
-            teardownCamera()
-        }
+        override fun close() = teardownCamera()
 
         private fun teardownCamera() {
             runCatching { videoRecorder?.stop() }
@@ -278,30 +259,68 @@ class AusbcCameraController
         }
 
         override fun setResolution(resolution: Resolution) {
-            // updateResolution() and eager close-then-reopen both crash (null SurfaceTexture).
-            // Instead close the camera and let the CLOSED callback re-open at the new size on the
-            // same, still-attached preview view. Guarded so a no-op re-open never fires.
+            // AUSBC 3.2.7's own resize paths are unusable: updateResolution() crashes (null
+            // SurfaceTexture) and its getSuitableSize() collapses every request to 640x480 (it
+            // returns the first advertised size that is EITHER the exact request OR 640x480, and
+            // 640x480 is usually listed first). So drive the underlying UVCCamera directly:
+            // stop, set the exact size (prefer MJPEG for high-res, fall back to YUYV), restart.
             val cam = camera ?: return
-            if (previewView == null) return
-            pendingReopen = resolution
-            cam.closeCamera()
+            val uvc = uvcCameraOf(cam) ?: return
+            val device = pendingDevice
+            val surface = previewView?.surfaceTexture
+            runCatching {
+                uvc.stopPreview()
+                val ok =
+                    runCatching {
+                        uvc.setPreviewSize(
+                            resolution.width,
+                            resolution.height,
+                            UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
+                            UVCCamera.DEFAULT_PREVIEW_MAX_FPS,
+                            UVCCamera.FRAME_FORMAT_MJPEG,
+                            PREVIEW_BANDWIDTH,
+                        )
+                    }.isSuccess
+                if (!ok) {
+                    uvc.setPreviewSize(
+                        resolution.width,
+                        resolution.height,
+                        UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
+                        UVCCamera.DEFAULT_PREVIEW_MAX_FPS,
+                        UVCCamera.FRAME_FORMAT_YUYV,
+                        PREVIEW_BANDWIDTH,
+                    )
+                }
+                // stopPreview() detaches the native preview window; re-attach the surface before
+                // restarting or startPreview logs "window does not exist" and stays black.
+                if (surface != null) uvc.setPreviewTexture(surface)
+                uvc.startPreview()
+                currentSize = resolution
+                if (device != null) {
+                    _events.tryEmit(CameraEvent.Opened(device.displayName(), resolution, availableSizes))
+                }
+            }.onFailure {
+                _events.tryEmit(CameraEvent.OpenFailed("resolution change failed"))
+            }
         }
 
         /**
-         * Route the physical shutter button on the USB camera to a capture. The UVCCamera that
-         * owns the button callback is private to MultiCameraClient.Camera, so reach it reflectively
-         * once the camera is open. Best-effort: not every device reports button events.
+         * Route the physical shutter button on the USB camera to a capture. Best-effort: not every
+         * device reports button events.
          */
         private fun attachButtonCallback(cam: MultiCameraClient.Camera) {
+            uvcCameraOf(cam)?.setButtonCallback { _, state ->
+                if (state != 0) _events.tryEmit(CameraEvent.ShutterPressed)
+            }
+        }
+
+        /** The UVCCamera is private to MultiCameraClient.Camera; reach it reflectively once open. */
+        private fun uvcCameraOf(cam: MultiCameraClient.Camera): UVCCamera? =
             runCatching {
                 val field = MultiCameraClient.Camera::class.java.getDeclaredField("mUvcCamera")
                 field.isAccessible = true
-                val uvc = field.get(cam) as? UVCCamera ?: return
-                uvc.setButtonCallback { _, state ->
-                    if (state != 0) _events.tryEmit(CameraEvent.ShutterPressed)
-                }
-            }
-        }
+                field.get(cam) as? UVCCamera
+            }.getOrNull()
 
         override fun setRotation(degrees: Int) {
             // 3.2.7 has no render-side rotation; rotate the preview surface itself.
@@ -374,5 +393,6 @@ class AusbcCameraController
             const val DEFAULT_PREVIEW_HEIGHT = 720
             const val JPEG_QUALITY = 95
             const val DEFAULT_BIT_RATE = 6_000_000
+            const val PREVIEW_BANDWIDTH = 1.0f
         }
     }
