@@ -69,7 +69,8 @@ class MediaStoreMediaRepository @Inject constructor(
     }
 
     override suspend fun delete(item: MediaItem): Boolean = withContext(Dispatchers.IO) {
-        context.contentResolver.delete(Uri.parse(item.uri), null, null) > 0
+        runCatching { context.contentResolver.delete(Uri.parse(item.uri), null, null) > 0 }
+            .getOrDefault(false)
     }
 }
 

@@ -58,4 +58,15 @@ class GalleryViewModelTest {
         vm.delete(photo)
         assertTrue(vm.state.value is GalleryUiState.Empty)
     }
+
+    @Test
+    fun `failed delete re-shows item after refresh`() = runTest {
+        repo.items += listOf(video, photo)
+        repo.deleteResult = false
+        val vm = GalleryViewModel(repo)
+        vm.delete(video)
+        assertEquals(listOf(video), repo.deleted)
+        val content = vm.state.value as GalleryUiState.Content
+        assertEquals(listOf(video, photo), content.items)
+    }
 }
