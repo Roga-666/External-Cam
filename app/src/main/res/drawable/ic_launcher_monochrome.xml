@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Ring silhouette r30 -> r20 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,24a30,30 0 1,0 0,60a30,30 0 1,0 0,-60zM54,34a20,20 0 1,1 0,40a20,20 0 1,1 0,-40z" />
+    <!-- Pupil dot r10 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,44a10,10 0 1,0 0,20a10,10 0 1,0 0,-20z" />
+</vector>
