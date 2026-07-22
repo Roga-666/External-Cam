@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -112,8 +112,7 @@ private fun GalleryGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(items.size) { index ->
-            val item = items[index]
+        itemsIndexed(items, key = { _, item -> item.uri }) { index, item ->
             Box(
                 Modifier
                     .aspectRatio(1f)
@@ -223,9 +222,12 @@ private fun ZoomableImage(item: MediaItem) {
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(1f, 6f)
-                        offsetX += pan.x
-                        offsetY += pan.y
-                        if (scale == 1f) {
+                        // Pan only when zoomed in; at 1x the image must stay centred so
+                        // horizontal drags belong to the pager, not to panning.
+                        if (scale > 1f) {
+                            offsetX += pan.x
+                            offsetY += pan.y
+                        } else {
                             offsetX = 0f
                             offsetY = 0f
                         }

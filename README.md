@@ -61,6 +61,14 @@ published on the repos this project allows and no app code references them.
   saved unrotated and unmirrored regardless of the on-screen preview
   orientation.
 - UVC camera controls (brightness/focus) are not exposed yet (v2).
+- **Single device only.** The first attached UVC device wins; there is no
+  device chooser, so with multiple cameras connected the app streams whichever
+  one the system reports first.
+- **No shutter flash animation.** There is no screen flash on capture; the
+  updated gallery thumbnail in the bottom-left corner is the capture feedback.
+- **Microphone permission is no longer requested.** Recording is video-only
+  (see above), so the app declares no `RECORD_AUDIO` permission and never
+  prompts for the microphone.
 
 ## Quality gates
 

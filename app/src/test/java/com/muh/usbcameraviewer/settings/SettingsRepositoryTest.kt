@@ -71,4 +71,21 @@ class SettingsRepositoryTest {
             repo.setFilenamePrefix("   ")
             assertEquals("UCV", repo.settings.first().filenamePrefix)
         }
+
+    @Test
+    fun `prefix with path separators is sanitized`() =
+        runTest(dispatcher) {
+            val repo = repo()
+            repo.setFilenamePrefix("a/b")
+            assertEquals("ab", repo.settings.first().filenamePrefix)
+        }
+
+    @Test
+    fun `prefix stripped to nothing falls back to default`() =
+        runTest(dispatcher) {
+            val repo = repo()
+            // Only path separators and leading dots: sanitizes away, so the default is used.
+            repo.setFilenamePrefix("../")
+            assertEquals("UCV", repo.settings.first().filenamePrefix)
+        }
 }
