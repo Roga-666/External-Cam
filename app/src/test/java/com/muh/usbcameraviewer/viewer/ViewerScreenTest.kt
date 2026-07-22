@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.muh.usbcameraviewer.camera.CameraError
 import com.muh.usbcameraviewer.camera.CameraUiState
+import com.muh.usbcameraviewer.camera.CaptureMode
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.ui.theme.UcvTheme
 import org.junit.Assert.assertTrue
@@ -67,6 +68,12 @@ class ViewerScreenTest {
         compose.onNodeWithContentDescription("Rotate preview").assertIsDisplayed()
         compose.onNodeWithContentDescription("Open gallery").assertIsDisplayed()
         compose.onNodeWithContentDescription("Choose resolution").assertIsDisplayed()
+    }
+
+    @Test
+    fun streaming_recording_showsElapsedChip() {
+        setContent(streaming.copy(captureMode = CaptureMode.VIDEO, isRecording = true, recordingSeconds = 83))
+        compose.onNodeWithText("01:23").assertIsDisplayed()
     }
 
     @Test
