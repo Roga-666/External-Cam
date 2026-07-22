@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42.6%" r="72.2%">
+      <stop offset="0%" stop-color="#152430"/>
+      <stop offset="100%" stop-color="#0B0F12"/>
+    </radialGradient>
+    <linearGradient id="bezel" x1="34" y1="28" x2="76" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#C4E7FF"/>
+      <stop offset="100%" stop-color="#4FA8DD"/>
+    </linearGradient>
+    <radialGradient id="pupil" cx="49" cy="45" r="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2E6E96"/>
+      <stop offset="100%" stop-color="#081520"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="108" height="108" rx="24" fill="url(#bg)"/>
+  <path fill="url(#bezel)" fill-rule="evenodd"
+        d="M54,24a30,30 0 1,0 0,60a30,30 0 1,0 0,-60zM54,32a22,22 0 1,1 0,44a22,22 0 1,1 0,-44z"/>
+  <path fill="#16232D" fill-rule="evenodd"
+        d="M54,32a22,22 0 1,0 0,44a22,22 0 1,0 0,-44zM54,38a16,16 0 1,1 0,32a16,16 0 1,1 0,-32z"/>
+  <path fill="url(#pupil)" d="M54,38a16,16 0 1,0 0,32a16,16 0 1,0 0,-32z"/>
+  <circle cx="49" cy="47" r="4.5" fill="#E8F6FF" fill-opacity="0.92"/>
+</svg>
