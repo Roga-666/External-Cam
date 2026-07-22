@@ -49,7 +49,7 @@
 
 - **Viewer** — shutter button takes a photo; toggle to video mode to record (timer chip shows elapsed time). Resolution chip opens the mode picker; rotate cycles 90° steps; mirror flips the preview.
 - **Gallery** — tap the thumbnail shortcut. Pinch to zoom photos, tap play on videos (opens your system player), share or delete from the top bar.
-- **Settings** — startup resolution policy, video quality, filename prefix, keep-screen-on, open-source licenses.
+- **Settings** — startup resolution policy, video quality (currently no effect — see Known limitations), filename prefix, keep-screen-on, open-source licenses.
 
 ## Troubleshooting
 
