@@ -7,12 +7,12 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * Provides the CameraController implementation.
- * This is a placeholder until AusbcCameraController is implemented.
+ * Temporary binding so Hilt compiles before the real controller exists.
+ * Task 6 deletes this file and creates CameraModule.kt binding AusbcCameraController.
  */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class CameraModule {
+abstract class StubCameraModule {
     @Binds
     @Singleton
     abstract fun bindCameraController(impl: StubCameraController): CameraController

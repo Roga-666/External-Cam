@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -72,21 +71,17 @@ class ViewerViewModel @Inject constructor(
     }
 
     fun onRotate() {
-        _state.update { s ->
-            if (s !is CameraUiState.Streaming) return
-            val degrees = (s.rotationDegrees + 90) % 360
-            controller.setRotation(degrees)
-            s.copy(rotationDegrees = degrees)
-        }
+        val s = _state.value as? CameraUiState.Streaming ?: return
+        val degrees = (s.rotationDegrees + 90) % 360
+        controller.setRotation(degrees)
+        _state.value = s.copy(rotationDegrees = degrees)
     }
 
     fun onToggleMirror() {
-        _state.update { s ->
-            if (s !is CameraUiState.Streaming) return
-            val mirrored = !s.mirrored
-            controller.setMirror(mirrored)
-            s.copy(mirrored = mirrored)
-        }
+        val s = _state.value as? CameraUiState.Streaming ?: return
+        val mirrored = !s.mirrored
+        controller.setMirror(mirrored)
+        _state.value = s.copy(mirrored = mirrored)
     }
 
     override fun onCleared() {
