@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.muh.usbcameraviewer.gallery.GalleryScreen
+import com.muh.usbcameraviewer.settings.LicensesScreen
 import com.muh.usbcameraviewer.settings.SettingsScreen
 import com.muh.usbcameraviewer.viewer.ViewerScreen
 
@@ -16,6 +17,7 @@ object Routes {
     const val VIEWER = "viewer"
     const val GALLERY = "gallery"
     const val SETTINGS = "settings"
+    const val LICENSES = "licenses"
 }
 
 @Composable
@@ -29,6 +31,12 @@ fun AppNav() {
             )
         }
         composable(Routes.GALLERY) { GalleryScreen(onBack = { nav.popBackStack() }) }
-        composable(Routes.SETTINGS) { SettingsScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenLicenses = { nav.navigate(Routes.LICENSES) },
+            )
+        }
+        composable(Routes.LICENSES) { LicensesScreen(onBack = { nav.popBackStack() }) }
     }
 }

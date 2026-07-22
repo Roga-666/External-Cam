@@ -39,8 +39,12 @@
     <string name="settings_quality_medium">Medium (6 Mbps)</string>
     <string name="settings_quality_high">High (12 Mbps)</string>
     <string name="settings_record_audio">Record microphone audio</string>
+    <string name="settings_record_audio_unavailable">Not available with the current camera library. Videos record without sound.</string>
     <string name="settings_filename_prefix">Filename prefix</string>
     <string name="settings_keep_screen_on">Keep screen on while viewing</string>
     <string name="settings_about">About</string>
     <string name="settings_about_body">USB Camera Viewer %1$s — by muh. Fully offline; no data leaves your device. UVC support via the open-source AUSBC library (Apache-2.0).</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="licenses_title">Open-source licenses</string>
+    <string name="licenses_intro">This app bundles the following open-source components. Their license texts are reproduced in full below.</string>
 </resources>
