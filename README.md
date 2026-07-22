@@ -67,6 +67,9 @@
     ./build.sh release --gates    # run test/detekt/ktlint/lint first
     ./build.sh debug --install    # build + adb install
 
+Built APKs are collected into `dist/` (git-ignored) as
+`usb-camera-viewer-<version>-<variant>[-unsigned].apk`.
+
 Quality gates: `./gradlew test detekt ktlintCheck lint`.
 
 **Release signing** (optional — builds are unsigned without it): create `keystore.properties` at the repo root (git-ignored):

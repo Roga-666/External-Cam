@@ -66,8 +66,16 @@ else
 fi
 
 [[ -f "$APK" ]] || { echo "ERROR: expected APK not found: $APK" >&2; exit 1; }
-echo "APK: $APK ($(du -h "$APK" | cut -f1))"
+
+# Collect into dist/ with a versioned name.
+VERSION="$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts || echo unknown)"
+SUFFIX=""
+[[ "$APK" == *-unsigned.apk ]] && SUFFIX="-unsigned"
+DIST="dist/usb-camera-viewer-${VERSION}-${VARIANT}${SUFFIX}.apk"
+mkdir -p dist
+cp "$APK" "$DIST"
+echo "APK: $DIST ($(du -h "$DIST" | cut -f1))"
 
 if [[ "$INSTALL" == 1 ]]; then
-    adb install -r "$APK"
+    adb install -r "$DIST"
 fi
