@@ -30,4 +30,17 @@
     <string name="delete_confirm_body">%1$s will be removed permanently.</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_resolution_policy">Startup resolution</string>
+    <string name="settings_resolution_remember">Remember last used</string>
+    <string name="settings_resolution_ask">Ask every time</string>
+    <string name="settings_video_quality">Video quality</string>
+    <string name="settings_quality_low">Low (2 Mbps)</string>
+    <string name="settings_quality_medium">Medium (6 Mbps)</string>
+    <string name="settings_quality_high">High (12 Mbps)</string>
+    <string name="settings_record_audio">Record microphone audio</string>
+    <string name="settings_filename_prefix">Filename prefix</string>
+    <string name="settings_keep_screen_on">Keep screen on while viewing</string>
+    <string name="settings_about">About</string>
+    <string name="settings_about_body">USB Camera Viewer %1$s — by muh. Fully offline; no data leaves your device. UVC support via the open-source AUSBC library (Apache-2.0).</string>
 </resources>

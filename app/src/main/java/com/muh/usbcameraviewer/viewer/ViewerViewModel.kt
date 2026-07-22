@@ -48,6 +48,14 @@ class ViewerViewModel @Inject constructor(
         .map { it.recordAudio }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val keepScreenOn: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.keepScreenOn }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val autoShowResolutionPicker: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.resolutionPolicy == ResolutionPolicy.ALWAYS_ASK }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private var tickerJob: Job? = null
 
     init {

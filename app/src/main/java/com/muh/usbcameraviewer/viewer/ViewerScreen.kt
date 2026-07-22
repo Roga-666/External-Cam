@@ -40,6 +40,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -76,6 +78,7 @@ data class ViewerCallbacks(
     val onOpenGallery: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val recordAudioEnabled: Boolean = false,
+    val autoShowResolutionPicker: Boolean = false,
     val previewFactory: (android.content.Context) -> android.view.View = { TextureView(it) },
 )
 
@@ -87,8 +90,17 @@ fun ViewerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
+    val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
+    val autoShowResolutionPicker by viewModel.autoShowResolutionPicker.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+
+    val view = LocalView.current
+    DisposableEffect(keepScreenOn, state is CameraUiState.Streaming) {
+        view.keepScreenOn = keepScreenOn && state is CameraUiState.Streaming
+        onDispose { view.keepScreenOn = false }
+    }
+
     Box(Modifier.fillMaxSize()) {
         ViewerContent(
             state = state,
@@ -104,6 +116,7 @@ fun ViewerScreen(
                 onOpenGallery = onOpenGallery,
                 onOpenSettings = onOpenSettings,
                 recordAudioEnabled = recordAudioEnabled,
+                autoShowResolutionPicker = autoShowResolutionPicker,
                 previewFactory = viewModel.previewFactory,
             ),
         )
@@ -265,7 +278,7 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                var resMenu by remember { mutableStateOf(false) }
+                var resMenu by remember { mutableStateOf(callbacks.autoShowResolutionPicker) }
                 val pickResolutionDescription = stringResource(R.string.cd_pick_resolution)
                 Box {
                     AssistChip(

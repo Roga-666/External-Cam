@@ -1,11 +1,11 @@
 package com.muh.usbcameraviewer.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.muh.usbcameraviewer.gallery.GalleryScreen
+import com.muh.usbcameraviewer.settings.SettingsScreen
 import com.muh.usbcameraviewer.viewer.ViewerScreen
 
 object Routes {
@@ -25,6 +25,6 @@ fun AppNav() {
             )
         }
         composable(Routes.GALLERY) { GalleryScreen(onBack = { nav.popBackStack() }) }
-        composable(Routes.SETTINGS) { Text("Settings — Task 10") }
+        composable(Routes.SETTINGS) { SettingsScreen(onBack = { nav.popBackStack() }) }
     }
 }
