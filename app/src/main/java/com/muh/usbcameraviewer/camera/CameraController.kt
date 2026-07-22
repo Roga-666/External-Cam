@@ -31,6 +31,7 @@ interface CameraController {
     /** Close the camera stream, keep monitoring. */
     fun close()
 
+    /** Change the preview resolution (implementations may restart the stream). */
     fun setResolution(resolution: Resolution)
 
     fun setRotation(degrees: Int)

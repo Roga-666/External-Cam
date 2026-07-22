@@ -101,10 +101,9 @@ fun SettingsScreen(
 
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_record_audio)) },
-                supportingContent = { Text(stringResource(R.string.settings_record_audio_unavailable)) },
+                supportingContent = { Text(stringResource(R.string.settings_record_audio_hint)) },
                 trailingContent = {
-                    // Disabled: AUSBC 3.2.7 records video-only, so the toggle cannot take effect.
-                    Switch(checked = settings.recordAudio, onCheckedChange = viewModel::setRecordAudio, enabled = false)
+                    Switch(checked = settings.recordAudio, onCheckedChange = viewModel::setRecordAudio)
                 },
             )
             ListItem(

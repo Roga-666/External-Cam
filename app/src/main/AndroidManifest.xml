@@ -8,6 +8,8 @@
 
     <!-- Android 10+ requires CAMERA runtime permission to open a USB Video Class device. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Requested only when the user enables audio for video recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />

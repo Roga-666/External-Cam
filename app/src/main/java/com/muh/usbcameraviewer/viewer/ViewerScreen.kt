@@ -87,9 +87,11 @@ data class ViewerCallbacks(
     val onOpenGallery: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val autoShowResolutionPicker: Boolean = false,
+    val recordAudioEnabled: Boolean = false,
     val previewFactory: (android.content.Context) -> android.view.View = { TextureView(it) },
 )
 
+@Suppress("LongMethod") // wires several permission launchers + lifecycle effects into one screen
 @Composable
 fun ViewerScreen(
     onOpenGallery: () -> Unit,
@@ -99,6 +101,7 @@ fun ViewerScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val autoShowResolutionPicker by viewModel.autoShowResolutionPicker.collectAsStateWithLifecycle()
+    val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -154,10 +157,18 @@ fun ViewerScreen(
                     onOpenGallery = onOpenGallery,
                     onOpenSettings = onOpenSettings,
                     autoShowResolutionPicker = autoShowResolutionPicker,
+                    recordAudioEnabled = recordAudioEnabled,
                     previewFactory = viewModel.previewFactory,
                 ),
         )
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        // Float above the bottom camera controls (shutter row) rather than over them.
+        SnackbarHost(
+            snackbar,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .systemBarsPadding()
+                .padding(bottom = 108.dp),
+        )
     }
 }
 
@@ -297,13 +308,33 @@ private fun StreamingContent(
     // the Connecting -> Streaming transition; this composable only draws the control overlays.
     val context = LocalContext.current
 
-    val storagePermission =
+    // Chained runtime-permission gate for the shutter: storage (pre-Q only) -> mic (when
+    // starting an audio video recording) -> fire the shutter.
+    val audioPermission =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) { granted -> if (granted) callbacks.onShutter() }
 
-    // Pre-Q needs WRITE_EXTERNAL_STORAGE to publish captures; Q+ uses scoped storage. Audio is
-    // not requested — AUSBC 3.2.7 records video-only, so RECORD_AUDIO would be misleading.
+    fun proceedAfterStorage() {
+        val startingAudioVideo =
+            state.captureMode == CaptureMode.VIDEO && !state.isRecording && callbacks.recordAudioEnabled
+        val needsAudio =
+            startingAudioVideo &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+        if (needsAudio) {
+            audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            callbacks.onShutter()
+        }
+    }
+
+    val storagePermission =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted -> if (granted) proceedAfterStorage() }
+
+    // Pre-Q needs WRITE_EXTERNAL_STORAGE to publish captures; Q+ uses scoped storage.
     val shutter = {
         val needsStorage =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
@@ -312,7 +343,7 @@ private fun StreamingContent(
         if (needsStorage) {
             storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         } else {
-            callbacks.onShutter()
+            proceedAfterStorage()
         }
     }
     Box(Modifier.fillMaxSize()) {

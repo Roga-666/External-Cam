@@ -39,7 +39,7 @@
     <string name="settings_quality_medium">Medium (6 Mbps)</string>
     <string name="settings_quality_high">High (12 Mbps)</string>
     <string name="settings_record_audio">Record microphone audio</string>
-    <string name="settings_record_audio_unavailable">Not available with the current camera library. Videos record without sound.</string>
+    <string name="settings_record_audio_hint">Include sound from the phone microphone when recording video.</string>
     <string name="settings_filename_prefix">Filename prefix</string>
     <string name="settings_keep_screen_on">Keep screen on while viewing</string>
     <string name="settings_about">About</string>

@@ -6,25 +6,25 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
 import android.os.Build
-import android.util.Log
-import android.view.View
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.callback.ICameraStateCallBack
-import com.jiangdg.ausbc.callback.ICaptureCallBack
 import com.jiangdg.ausbc.callback.IDeviceConnectCallBack
 import com.jiangdg.ausbc.camera.bean.CameraRequest
 import com.jiangdg.ausbc.widget.AspectRatioTextureView
 import com.serenegiant.usb.USBMonitor
+import com.serenegiant.usb.UVCCamera
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
 
 /**
  * Upgrades flag-less `registerReceiver` calls with [Context.RECEIVER_NOT_EXPORTED].
@@ -58,6 +58,7 @@ internal class ReceiverFlagContext(base: Context) : ContextWrapper(base) {
  * API differs from the 3.3.x code in the task brief; every difference is noted at
  * its call site below and in the task report.
  */
+@Suppress("TooManyFunctions") // single facade over the whole AUSBC lifecycle + capture surface
 @Singleton
 class AusbcCameraController
     @Inject
@@ -76,10 +77,28 @@ class AusbcCameraController
 
         // 3.2.7 exposes no render rotation/mirror on the camera, so rotate/mirror are
         // applied as View transforms on the preview surface (see setRotation/setMirror).
-        private var previewView: View? = null
-        private var recordingFile: File? = null
+        private var previewView: AspectRatioTextureView? = null
+
+        // AUSBC 3.2.7's captureImage/captureVideoStart write to a file only after passing
+        // CameraUtils.hasStoragePermission() — WRITE_EXTERNAL_STORAGE, which cannot be granted
+        // on Android 13+, so those APIs always fail. We instead grab frames straight off the
+        // preview TextureView (getBitmap) and encode photos/videos ourselves, via MediaStore.
+        @Volatile private var currentSize: Resolution = Resolution(DEFAULT_PREVIEW_WIDTH, DEFAULT_PREVIEW_HEIGHT)
+
+        @Volatile private var videoRecorder: FrameVideoRecorder? = null
+
+        // Set by setResolution so the CLOSED callback re-opens at the new size.
+        @Volatile private var pendingReopen: Resolution? = null
 
         private fun UsbDevice.displayName(): String = productName?.takeIf { it.isNotBlank() } ?: "USB Camera"
+
+        /** Grab the frame currently rendered on the preview surface, on the main thread. */
+        private suspend fun grabBitmap(): Bitmap? =
+            withContext(Dispatchers.Main.immediate) {
+                val view = previewView ?: return@withContext null
+                if (!view.isAvailable) return@withContext null
+                view.bitmap
+            }
 
         override fun startMonitoring() {
             if (client != null) return
@@ -101,6 +120,7 @@ class AusbcCameraController
                         }
 
                         override fun onDetachDec(device: UsbDevice?) {
+                            android.util.Log.d("UCVDBG", "onDetachDec pendingReopen=$pendingReopen")
                             if (device == pendingDevice) {
                                 teardownCamera()
                                 // Device is truly gone: the control block is now stale.
@@ -123,6 +143,7 @@ class AusbcCameraController
                             device: UsbDevice?,
                             ctrlBlock: USBMonitor.UsbControlBlock?,
                         ) {
+                            android.util.Log.d("UCVDBG", "onDisConnectDec pendingReopen=$pendingReopen")
                             teardownCamera()
                             // Device disconnected: drop the stale control block.
                             this@AusbcCameraController.ctrlBlock = null
@@ -156,9 +177,22 @@ class AusbcCameraController
             preview: Any,
             preferred: Resolution?,
         ) {
+            val view =
+                preview as? AspectRatioTextureView
+                    ?: run {
+                        _events.tryEmit(CameraEvent.OpenFailed("preview is not AspectRatioTextureView"))
+                        return
+                    }
+            openInternal(view, preferred)
+        }
+
+        private fun openInternal(
+            view: AspectRatioTextureView,
+            preferred: Resolution?,
+        ) {
             // Close any camera opened earlier before constructing a new one, so a
-            // re-open (returning from the gallery, foregrounding) never double-opens
-            // or leaks the native camera. ctrlBlock is preserved by teardownCamera().
+            // re-open (returning from the gallery, foregrounding, resolution change) never
+            // double-opens or leaks the native camera. ctrlBlock is preserved by teardownCamera().
             teardownCamera()
             val device = pendingDevice
             val block = ctrlBlock
@@ -166,12 +200,6 @@ class AusbcCameraController
                 _events.tryEmit(CameraEvent.OpenFailed("no device or control block"))
                 return
             }
-            val view =
-                preview as? AspectRatioTextureView
-                    ?: run {
-                        _events.tryEmit(CameraEvent.OpenFailed("preview is not AspectRatioTextureView"))
-                        return
-                    }
             previewView = view
             // 3.2.7: instantiate MultiCameraClient.Camera directly (no CameraUVC class).
             val cam = MultiCameraClient.Camera(context, device)
@@ -198,11 +226,25 @@ class AusbcCameraController
                                             ?.let { Resolution(it.previewWidth, it.previewHeight) }
                                         ?: sizes.firstOrNull()
                                         ?: Resolution(0, 0)
+                                currentSize = current
+                                attachButtonCallback(cam)
                                 _events.tryEmit(
                                     CameraEvent.Opened(device.displayName(), current, sizes),
                                 )
                             }
-                            ICameraStateCallBack.State.CLOSED -> Unit
+                            ICameraStateCallBack.State.CLOSED -> {
+                                // A resolution change closes the camera, then re-opens here once
+                                // teardown is complete. Re-opening on the same still-attached
+                                // TextureView (whose SurfaceTexture stays valid) avoids the
+                                // close/open race that crashes updateResolution and eager reopen.
+                                val reopen = pendingReopen
+                                val reopenView = previewView
+                                android.util.Log.d("UCVDBG", "CLOSED reopen=$reopen view=${reopenView != null}")
+                                if (reopen != null && reopenView != null) {
+                                    pendingReopen = null
+                                    reopenView.post { openInternal(reopenView, reopen) }
+                                }
+                            }
                             ICameraStateCallBack.State.ERROR ->
                                 _events.tryEmit(CameraEvent.OpenFailed(msg ?: "camera error"))
                         }
@@ -220,17 +262,43 @@ class AusbcCameraController
             camera = cam
         }
 
-        override fun close() = teardownCamera()
+        override fun close() {
+            pendingReopen = null
+            teardownCamera()
+        }
 
         private fun teardownCamera() {
-            runCatching { camera?.captureVideoStop() }
+            runCatching { videoRecorder?.stop() }
+            videoRecorder = null
             runCatching { camera?.closeCamera() }
             camera = null
             previewView = null
         }
 
         override fun setResolution(resolution: Resolution) {
-            camera?.updateResolution(resolution.width, resolution.height)
+            // updateResolution() and eager close-then-reopen both crash (null SurfaceTexture).
+            // Instead close the camera and let the CLOSED callback re-open at the new size on the
+            // same, still-attached preview view. Guarded so a no-op re-open never fires.
+            val cam = camera ?: return
+            if (previewView == null) return
+            pendingReopen = resolution
+            cam.closeCamera()
+        }
+
+        /**
+         * Route the physical shutter button on the USB camera to a capture. The UVCCamera that
+         * owns the button callback is private to MultiCameraClient.Camera, so reach it reflectively
+         * once the camera is open. Best-effort: not every device reports button events.
+         */
+        private fun attachButtonCallback(cam: MultiCameraClient.Camera) {
+            runCatching {
+                val field = MultiCameraClient.Camera::class.java.getDeclaredField("mUvcCamera")
+                field.isAccessible = true
+                val uvc = field.get(cam) as? UVCCamera ?: return
+                uvc.setButtonCallback { _, state ->
+                    if (state != 0) _events.tryEmit(CameraEvent.ShutterPressed)
+                }
+            }
         }
 
         override fun setRotation(degrees: Int) {
@@ -243,92 +311,66 @@ class AusbcCameraController
             previewView?.scaleX = if (mirrored) -1f else 1f
         }
 
-        override suspend fun capturePhoto(target: File): Result<File> =
-            suspendCancellableCoroutine { cont ->
-                val cam =
-                    camera ?: run {
-                        cont.resume(Result.failure(IllegalStateException("camera not open")))
-                        return@suspendCancellableCoroutine
+        override suspend fun capturePhoto(target: File): Result<File> {
+            val bitmap =
+                grabBitmap()
+                    ?: return Result.failure(IllegalStateException("no preview frame yet"))
+            return withContext(Dispatchers.IO) {
+                runCatching {
+                    FileOutputStream(target).use { out ->
+                        val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                        check(ok) { "JPEG compression failed" }
                     }
-                cam.captureImage(
-                    object : ICaptureCallBack {
-                        override fun onBegin() = Unit
-
-                        override fun onComplete(path: String?) {
-                            if (cont.isActive) {
-                                cont.resume(
-                                    if (path != null) {
-                                        Result.success(File(path))
-                                    } else {
-                                        Result.failure(IllegalStateException("null capture path"))
-                                    },
-                                )
-                            }
-                        }
-
-                        override fun onError(error: String?) {
-                            if (cont.isActive) {
-                                cont.resume(
-                                    Result.failure(IllegalStateException(error ?: "capture failed")),
-                                )
-                            }
-                        }
-                    },
-                    target.absolutePath,
-                )
+                    target
+                }
             }
+        }
 
         override suspend fun startRecording(
             target: File,
             withAudio: Boolean,
             bitRate: Int,
         ): Result<Unit> {
-            val cam = camera ?: return Result.failure(IllegalStateException("camera not open"))
-            if (withAudio || bitRate > 0) {
-                // 3.2.7's captureVideoStart(callBack, path, durationInSec) takes neither an audio
-                // toggle nor a bit-rate; record video-only until a version that supports them.
-                Log.w(TAG, "AUSBC 3.2.7 ignores withAudio=$withAudio / bitRate=$bitRate; recording video-only")
-            }
-            recordingFile = target
-            return suspendCancellableCoroutine { cont ->
-                cam.captureVideoStart(
-                    object : ICaptureCallBack {
-                        override fun onBegin() {
-                            if (cont.isActive) cont.resume(Result.success(Unit))
-                        }
-
-                        override fun onComplete(path: String?) = Unit // fires at stop
-
-                        override fun onError(error: String?) {
-                            if (cont.isActive) {
-                                cont.resume(
-                                    Result.failure(IllegalStateException(error ?: "record failed")),
-                                )
-                            }
-                        }
-                    },
-                    target.absolutePath,
-                    0L,
-                )
+            val view = previewView ?: return Result.failure(IllegalStateException("camera not open"))
+            // Even preview dimensions the encoder can handle; the source is the TextureView bitmap.
+            val w = currentSize.width.coerceAtLeast(2).let { it - (it % 2) }
+            val h = currentSize.height.coerceAtLeast(2).let { it - (it % 2) }
+            return withContext(Dispatchers.IO) {
+                runCatching {
+                    val recorder =
+                        FrameVideoRecorder(
+                            outputFile = target,
+                            width = w,
+                            height = h,
+                            bitRate = if (bitRate > 0) bitRate else DEFAULT_BIT_RATE,
+                            withAudio = withAudio,
+                            frameProvider = { view.takeIf { it.isAvailable }?.getBitmap(w, h) },
+                        )
+                    recorder.start()
+                    videoRecorder = recorder
+                }
             }
         }
 
         override suspend fun stopRecording(): Result<File> {
-            val file =
-                recordingFile
+            val recorder =
+                videoRecorder
                     ?: return Result.failure(IllegalStateException("not recording"))
-            runCatching { camera?.captureVideoStop() }
-            recordingFile = null
-            return if (file.exists() && file.length() > 0) {
-                Result.success(file)
-            } else {
-                Result.failure(IllegalStateException("recording file missing or empty"))
+            videoRecorder = null
+            return withContext(Dispatchers.IO) {
+                val file = recorder.stop()
+                if (file != null && file.exists() && file.length() > 0) {
+                    Result.success(file)
+                } else {
+                    Result.failure(IllegalStateException("recording file missing or empty"))
+                }
             }
         }
 
         private companion object {
-            const val TAG = "AusbcCameraController"
             const val DEFAULT_PREVIEW_WIDTH = 1280
             const val DEFAULT_PREVIEW_HEIGHT = 720
+            const val JPEG_QUALITY = 95
+            const val DEFAULT_BIT_RATE = 6_000_000
         }
     }

@@ -69,6 +69,11 @@ class ViewerViewModel
                 .map { it.resolutionPolicy == ResolutionPolicy.ALWAYS_ASK }
                 .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+        val recordAudioEnabled: StateFlow<Boolean> =
+            settingsRepository.settings
+                .map { it.recordAudio }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
         private var tickerJob: Job? = null
 
         // The preview view handed over by the AndroidView factory, retained so the camera can be
@@ -101,6 +106,7 @@ class ViewerViewModel
                     if (wasRecording) stopRecording()
                     _state.value = CameraUiState.NoDevice
                 }
+                CameraEvent.ShutterPressed -> onShutter()
             }
         }
 

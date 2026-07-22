@@ -14,6 +14,7 @@ import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -166,6 +167,7 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
             vm.onSelectResolution(res1080)
             assertEquals(listOf(res1080), fake.resolutionCalls)
+            assertEquals(res1080, settings.settings.first().lastResolution)
         }
 
     @Test

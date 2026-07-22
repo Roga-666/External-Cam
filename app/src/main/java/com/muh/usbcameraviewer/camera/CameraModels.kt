@@ -67,4 +67,7 @@ sealed interface CameraEvent {
     ) : CameraEvent
 
     data class OpenFailed(val reason: String) : CameraEvent
+
+    /** The physical shutter button on the USB camera was pressed. */
+    data object ShutterPressed : CameraEvent
 }
