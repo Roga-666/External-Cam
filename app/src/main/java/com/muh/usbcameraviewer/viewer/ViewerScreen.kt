@@ -94,6 +94,12 @@ fun ViewerContent(state: CameraUiState, callbacks: ViewerCallbacks) {
             .fillMaxSize()
             .background(Color.Black),
     ) {
+        // Single call site: the preview surface must survive the Connecting -> Streaming
+        // transition unchanged, otherwise Compose disposes/recreates the AndroidView and
+        // controller.open() gets invoked twice against a dead view.
+        if (state is CameraUiState.Connecting || state is CameraUiState.Streaming) {
+            PreviewSurface(callbacks)
+        }
         when (state) {
             CameraUiState.NoDevice -> CenteredMessage(
                 icon = { Icon(Icons.Filled.Usb, contentDescription = null, Modifier.size(64.dp)) },
@@ -119,8 +125,6 @@ fun ViewerContent(state: CameraUiState, callbacks: ViewerCallbacks) {
                     Modifier.padding(top = 16.dp),
                     color = MaterialTheme.colorScheme.onBackground,
                 )
-                // Preview surface must exist before open(); create it now.
-                PreviewSurface(callbacks)
             }
             is CameraUiState.Streaming -> StreamingContent(state, callbacks)
             is CameraUiState.Error -> CenteredMessage(
@@ -185,100 +189,97 @@ private fun PreviewSurface(callbacks: ViewerCallbacks) {
 
 @Composable
 private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCallbacks) {
-    Box(Modifier.fillMaxSize()) {
-        PreviewSurface(callbacks)
-
-        Column(
+    // PreviewSurface is rendered once by the caller (ViewerContent) so its identity survives
+    // the Connecting -> Streaming transition; this composable only draws the control overlays.
+    Column(
+        Modifier
+            .fillMaxSize()
+            .systemBarsPadding(),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        // Top bar
+        Row(
             Modifier
-                .fillMaxSize()
-                .systemBarsPadding(),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Top bar
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                var resMenu by remember { mutableStateOf(false) }
-                Box {
-                    AssistChip(
-                        onClick = { resMenu = true },
-                        label = { Text(state.resolution.toString()) },
-                        modifier = Modifier.semantics {
-                            contentDescription = "Choose resolution"
-                        },
-                    )
-                    DropdownMenu(expanded = resMenu, onDismissRequest = { resMenu = false }) {
-                        state.availableResolutions.forEach { res ->
-                            DropdownMenuItem(
-                                text = { Text(res.toString()) },
-                                onClick = {
-                                    resMenu = false
-                                    callbacks.onSelectResolution(res)
-                                },
-                            )
-                        }
-                    }
-                }
-                Row {
-                    IconButton(onClick = callbacks.onRotate) {
-                        Icon(
-                            Icons.Filled.Rotate90DegreesCw,
-                            contentDescription = stringResource(R.string.cd_rotate),
-                            tint = Color.White,
-                        )
-                    }
-                    IconButton(onClick = callbacks.onToggleMirror) {
-                        Icon(
-                            Icons.Filled.Flip,
-                            contentDescription = stringResource(R.string.cd_mirror),
-                            tint = if (state.mirrored) MaterialTheme.colorScheme.primary else Color.White,
-                        )
-                    }
-                    IconButton(onClick = callbacks.onOpenSettings) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.cd_open_settings),
-                            tint = Color.White,
+            var resMenu by remember { mutableStateOf(false) }
+            val pickResolutionDescription = stringResource(R.string.cd_pick_resolution)
+            Box {
+                AssistChip(
+                    onClick = { resMenu = true },
+                    label = { Text(state.resolution.toString()) },
+                    modifier = Modifier.semantics {
+                        contentDescription = pickResolutionDescription
+                    },
+                )
+                DropdownMenu(expanded = resMenu, onDismissRequest = { resMenu = false }) {
+                    state.availableResolutions.forEach { res ->
+                        DropdownMenuItem(
+                            text = { Text(res.toString()) },
+                            onClick = {
+                                resMenu = false
+                                callbacks.onSelectResolution(res)
+                            },
                         )
                     }
                 }
             }
+            Row {
+                IconButton(onClick = callbacks.onRotate) {
+                    Icon(
+                        Icons.Filled.Rotate90DegreesCw,
+                        contentDescription = stringResource(R.string.cd_rotate),
+                        tint = Color.White,
+                    )
+                }
+                IconButton(onClick = callbacks.onToggleMirror) {
+                    Icon(
+                        Icons.Filled.Flip,
+                        contentDescription = stringResource(R.string.cd_mirror),
+                        tint = if (state.mirrored) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+                IconButton(onClick = callbacks.onOpenSettings) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.cd_open_settings),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
 
-            // Bottom bar
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp, start = 32.dp, end = 32.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+        // Bottom bar
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp, start = 32.dp, end = 32.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = callbacks.onOpenGallery) {
+                Icon(
+                    Icons.Filled.PhotoLibrary,
+                    contentDescription = stringResource(R.string.cd_open_gallery),
+                    tint = Color.White,
+                )
+            }
+            FilledIconButton(
+                onClick = callbacks.onShutter,
+                modifier = Modifier.size(72.dp),
+                shape = CircleShape,
             ) {
-                IconButton(onClick = callbacks.onOpenGallery) {
-                    Icon(
-                        Icons.Filled.PhotoLibrary,
-                        contentDescription = stringResource(R.string.cd_open_gallery),
-                        tint = Color.White,
-                    )
-                }
-                FilledIconButton(
-                    onClick = callbacks.onShutter,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .semantics { contentDescription = "Take photo" },
-                    shape = CircleShape,
-                ) {
-                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
-                }
-                IconButton(onClick = callbacks.onToggleCaptureMode) {
-                    Icon(
-                        Icons.Filled.Flip, // replaced with Videocam/PhotoCamera toggle in Task 7
-                        contentDescription = stringResource(R.string.cd_toggle_mode),
-                        tint = Color.White,
-                    )
-                }
+                Icon(Icons.Filled.PhotoCamera, contentDescription = stringResource(R.string.cd_shutter))
+            }
+            IconButton(onClick = callbacks.onToggleCaptureMode) {
+                Icon(
+                    Icons.Filled.Flip, // replaced with Videocam/PhotoCamera toggle in Task 7
+                    contentDescription = stringResource(R.string.cd_toggle_mode),
+                    tint = Color.White,
+                )
             }
         }
     }

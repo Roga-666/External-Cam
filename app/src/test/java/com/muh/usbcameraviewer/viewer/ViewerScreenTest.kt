@@ -50,6 +50,17 @@ class ViewerScreenTest {
     }
 
     @Test
+    fun connecting_showsSpinnerAndCreatesPreview() {
+        var previewReady = false
+        setContent(
+            CameraUiState.Connecting("Endoscope"),
+            ViewerCallbacks(onPreviewReady = { previewReady = true }),
+        )
+        compose.onNodeWithText("Connecting to Endoscope…").assertIsDisplayed()
+        assertTrue(previewReady)
+    }
+
+    @Test
     fun streaming_showsShutterAndControls() {
         setContent(streaming)
         compose.onNodeWithContentDescription("Take photo").assertIsDisplayed()
