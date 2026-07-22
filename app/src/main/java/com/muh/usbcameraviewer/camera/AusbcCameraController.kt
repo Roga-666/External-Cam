@@ -199,6 +199,13 @@ class AusbcCameraController
                 return
             }
             previewView = view
+            // Re-letterbox whenever the view resizes (e.g. the screen rotates) — the transform is
+            // computed from the view dimensions, which change on rotation.
+            view.addOnLayoutChangeListener { _, left, top, right, bottom, oldL, oldT, oldR, oldB ->
+                if (right - left != oldR - oldL || bottom - top != oldB - oldT) {
+                    applyPreviewTransform(currentSize)
+                }
+            }
             // 3.2.7: instantiate MultiCameraClient.Camera directly (no CameraUVC class).
             val cam = MultiCameraClient.Camera(context, device)
             cam.setUsbControlBlock(block)
