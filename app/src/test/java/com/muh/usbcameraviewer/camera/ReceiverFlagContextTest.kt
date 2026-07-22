@@ -1,5 +1,6 @@
 package com.muh.usbcameraviewer.camera
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
@@ -30,6 +31,8 @@ class ReceiverFlagContextTest {
         }
     }
 
+    // The flag-less two-arg registerReceiver call is exactly the behavior under test.
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Test
     fun `two-arg registerReceiver is upgraded with NOT_EXPORTED flag`() {
         val recording = RecordingContext(ApplicationProvider.getApplicationContext())
@@ -37,7 +40,10 @@ class ReceiverFlagContextTest {
 
         wrapped.registerReceiver(
             object : BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) = Unit
+                override fun onReceive(
+                    context: Context?,
+                    intent: Intent?,
+                ) = Unit
             },
             IntentFilter("com.example.CUSTOM_ACTION"),
         )
