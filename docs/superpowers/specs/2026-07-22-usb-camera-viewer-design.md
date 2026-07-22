@@ -65,7 +65,7 @@ UI states (sealed):
 
 ### 3.3 Settings
 
-- Default resolution behavior (remember last / always ask / fixed)
+- Default resolution behavior (remember last / always ask)
 - Video quality (bitrate preset)
 - Record audio toggle (default off)
 - Filename prefix (default `UCV`)
