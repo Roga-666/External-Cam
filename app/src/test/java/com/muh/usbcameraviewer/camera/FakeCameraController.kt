@@ -48,7 +48,7 @@ class FakeCameraController : CameraController {
         closed = true
     }
 
-    override fun setResolution(resolution: Resolution) {
+    override suspend fun setResolution(resolution: Resolution) {
         resolutionCalls += resolution
     }
 
@@ -75,4 +75,8 @@ class FakeCameraController : CameraController {
         stopRecordingCalls++
         return stopRecordingResult ?: Result.success(recordingStarts.last().first.apply { writeText("mp4") })
     }
+
+    var previewLive = true
+
+    override suspend fun isPreviewLive(): Boolean = previewLive
 }

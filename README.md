@@ -120,7 +120,7 @@ Unit tests fake the camera; real UVC behavior needs a device. Run [docs/hardware
 ## Known limitations
 
 - **Capture is frame-based** — the pinned camera library's own photo/video writers require `WRITE_EXTERNAL_STORAGE` (ungrantable on Android 13+), so photos and videos are encoded from the preview frames (TextureView bitmap → JPEG; MediaCodec H.264 + optional AAC audio → MediaMuxer). Recording follows the current preview resolution.
-- **Resolution changes drive the UVC camera directly** — the pinned library's own resizer collapses every request to 640×480, so the app sets the preview size on the underlying camera itself. A size the device doesn't truly support in MJPEG (e.g. an odd 640×360) may still fall back to the nearest one it does.
+- **Resolution changes drive the UVC camera directly** — the pinned library's own resizer collapses every request to 640×480, so the app sets the preview size on the underlying camera itself, letterboxed to the correct aspect ratio. If a camera advertises a mode it can't actually stream (some deliver a black frame at 1080p), the app detects the dead stream and automatically reverts to the previous resolution with a message.
 - **Rotate/mirror affect the preview only** — captured photos/videos keep the sensor orientation.
 - **Single camera** — with multiple UVC devices attached, only the most recently attached one is used; there is no chooser.
 - A 512 px Play Store icon export is not generated (vector-only sources); render the launcher vectors at 512 px when needed.

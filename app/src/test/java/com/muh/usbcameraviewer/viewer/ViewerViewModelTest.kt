@@ -171,6 +171,27 @@ class ViewerViewModelTest {
         }
 
     @Test
+    fun `resolution that delivers no frames reverts to the previous one with a message`() =
+        runTest {
+            val settings = settingsRepo()
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
+            fake.previewLive = false // the new mode delivers only black frames
+            vm.messages.test {
+                vm.onSelectResolution(res1080)
+                assertTrue(awaitItem().contains("supported"))
+            }
+            // Switched to the requested size, then reverted to the previous one.
+            assertEquals(listOf(res1080, res720), fake.resolutionCalls)
+            assertEquals(res720, settings.settings.first().lastResolution)
+        }
+
+    @Test
     fun `preferred resolution from settings passed to open`() =
         runTest {
             val settings = settingsRepo()

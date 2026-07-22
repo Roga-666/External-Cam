@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -216,15 +215,11 @@ fun ViewerContent(
     ) {
         // Single call site: the preview surface must survive the Connecting -> Streaming
         // transition unchanged, otherwise Compose disposes/recreates the AndroidView and
-        // controller.open() gets invoked twice against a dead view. Sized to the stream's
-        // aspect ratio (centered, letterboxed) so the picture is never stretched.
+        // controller.open() gets invoked twice against a dead view. It always fills the box (a
+        // stable surface size — resizing it on a resolution change blanks the native stream); the
+        // controller letterboxes the picture with a TextureView transform instead.
         if (state is CameraUiState.Connecting || state is CameraUiState.Streaming) {
-            val aspect =
-                (state as? CameraUiState.Streaming)
-                    ?.resolution
-                    ?.takeIf { it.width > 0 && it.height > 0 }
-                    ?.let { it.width.toFloat() / it.height }
-            PreviewSurface(callbacks, aspect)
+            PreviewSurface(callbacks)
         }
         when (state) {
             CameraUiState.NoDevice ->
@@ -318,28 +313,17 @@ private fun CenteredMessage(
 }
 
 @Composable
-private fun BoxScope.PreviewSurface(
-    callbacks: ViewerCallbacks,
-    aspectRatio: Float?,
-) {
+private fun PreviewSurface(callbacks: ViewerCallbacks) {
     // onDispose fires when the surface leaves composition (navigating to the gallery), so the
     // ViewModel can close the native camera and demote to Connecting for a clean re-open on return.
     DisposableEffect(Unit) {
         onDispose { callbacks.onPreviewDisposed() }
     }
-    // Match the stream's aspect ratio, centered, so the picture is not stretched. Until the first
-    // resolution is known (aspectRatio null) fill the area to avoid a zero-size surface.
-    val sizeModifier =
-        if (aspectRatio != null) {
-            Modifier.aspectRatio(aspectRatio).align(Alignment.Center)
-        } else {
-            Modifier.fillMaxSize()
-        }
     AndroidView(
         factory = { context ->
             callbacks.previewFactory(context).also(callbacks.onPreviewReady)
         },
-        modifier = sizeModifier,
+        modifier = Modifier.fillMaxSize(),
     )
 }
 

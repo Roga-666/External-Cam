@@ -15,7 +15,6 @@ import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.ResolutionPolicy
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,6 +34,8 @@ import javax.inject.Inject
 private const val ROTATION_STEP_DEGREES = 90
 private const val FULL_ROTATION_DEGREES = 360
 private const val RECORDING_TICK_MS = 1_000L
+private const val RESOLUTION_VERIFY_TRIES = 8
+private const val RESOLUTION_VERIFY_STEP_MS = 200L
 private const val MIN_RECORDING_BYTES = 200L * 1024 * 1024
 private const val LOW_STORAGE_MESSAGE = "Not enough storage to record video."
 private const val CAMERA_PERMISSION_DENIED_MESSAGE =
@@ -95,8 +96,9 @@ class ViewerViewModel
         }
 
         private fun onEvent(event: CameraEvent) {
-            // Any resolved open/close ends a pending resolution switch.
-            if (event is CameraEvent.Opened || event is CameraEvent.OpenFailed || event == CameraEvent.Detached) {
+            // A failed open or a detach ends any pending resolution switch (the success path is
+            // cleared by onSelectResolution once it has verified the new stream is actually live).
+            if (event is CameraEvent.OpenFailed || event == CameraEvent.Detached) {
                 _switchingResolution.value = false
             }
             when (event) {
@@ -200,12 +202,37 @@ class ViewerViewModel
         }
 
         fun onSelectResolution(resolution: Resolution) {
-            // The native stop/setSize/start renegotiates the USB stream and can take a second;
-            // run it off the main thread so the UI never freezes. Opened re-emits when it's live.
-            if (_state.value !is CameraUiState.Streaming) return
+            // The native stop/setSize/start renegotiates the USB stream and can take a second; run
+            // it off the main thread so the UI never freezes. Some cameras advertise a mode they
+            // cannot actually stream (e.g. 1080p) and deliver a black frame — after switching, verify
+            // the preview is live and, if not, revert to the previous resolution with a message.
+            val previous = (_state.value as? CameraUiState.Streaming)?.resolution ?: return
+            if (previous == resolution) return
             _switchingResolution.value = true
-            viewModelScope.launch(Dispatchers.IO) { controller.setResolution(resolution) }
-            viewModelScope.launch { settingsRepository.setLastResolution(resolution) }
+            viewModelScope.launch {
+                try {
+                    controller.setResolution(resolution)
+                    settingsRepository.setLastResolution(resolution)
+                    // Poll for the first frame: a working stream clears the spinner in a few hundred
+                    // ms; a mode the camera can't deliver stays black until the deadline, then reverts.
+                    var live = false
+                    var tries = 0
+                    while (tries < RESOLUTION_VERIFY_TRIES && !live) {
+                        delay(RESOLUTION_VERIFY_STEP_MS)
+                        live = controller.isPreviewLive()
+                        tries++
+                    }
+                    if (!live) {
+                        _messages.tryEmit(
+                            "${resolution.width}×${resolution.height} isn't supported by this camera",
+                        )
+                        controller.setResolution(previous)
+                        settingsRepository.setLastResolution(previous)
+                    }
+                } finally {
+                    _switchingResolution.value = false
+                }
+            }
         }
 
         fun onRotate() {

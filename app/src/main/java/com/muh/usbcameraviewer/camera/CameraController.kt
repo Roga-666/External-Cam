@@ -31,8 +31,8 @@ interface CameraController {
     /** Close the camera stream, keep monitoring. */
     fun close()
 
-    /** Change the preview resolution (implementations may restart the stream). */
-    fun setResolution(resolution: Resolution)
+    /** Change the preview resolution (implementations may restart the stream). Does its own IO. */
+    suspend fun setResolution(resolution: Resolution)
 
     fun setRotation(degrees: Int)
 
@@ -50,4 +50,11 @@ interface CameraController {
 
     /** Stop recording, return finalized file. Safe to call after detach. */
     suspend fun stopRecording(): Result<File>
+
+    /**
+     * True if the preview is delivering frames (a bright pixel exists — endoscope LEDs make any
+     * live frame bright). Used after a resolution change to detect a mode the camera advertises but
+     * cannot actually stream (delivers a black frame), so the caller can revert.
+     */
+    suspend fun isPreviewLive(): Boolean
 }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.hardware.usb.UsbDevice
 import android.os.Build
 import com.jiangdg.ausbc.MultiCameraClient
@@ -225,6 +226,7 @@ class AusbcCameraController
                                         ?: Resolution(0, 0)
                                 currentSize = current
                                 availableSizes = sizes
+                                applyPreviewTransform(current)
                                 attachButtonCallback(cam)
                                 _events.tryEmit(
                                     CameraEvent.Opened(device.displayName(), current, sizes),
@@ -258,7 +260,12 @@ class AusbcCameraController
             previewView = null
         }
 
-        override fun setResolution(resolution: Resolution) {
+        override suspend fun setResolution(resolution: Resolution): Unit =
+            withContext(Dispatchers.IO) {
+                setResolutionBlocking(resolution)
+            }
+
+        private fun setResolutionBlocking(resolution: Resolution) {
             // AUSBC 3.2.7's own resize paths are unusable: updateResolution() crashes (null
             // SurfaceTexture) and its getSuitableSize() collapses every request to 640x480 (it
             // returns the first advertised size that is EITHER the exact request OR 640x480, and
@@ -296,6 +303,7 @@ class AusbcCameraController
                 if (surface != null) uvc.setPreviewTexture(surface)
                 uvc.startPreview()
                 currentSize = resolution
+                applyPreviewTransform(resolution)
                 if (device != null) {
                     _events.tryEmit(CameraEvent.Opened(device.displayName(), resolution, availableSizes))
                 }
@@ -314,6 +322,26 @@ class AusbcCameraController
             }
         }
 
+        override suspend fun isPreviewLive(): Boolean {
+            val bitmap = grabBitmap() ?: return false
+            // Sample a coarse grid; any bright pixel means frames are flowing (endoscope LED is on).
+            val last = LIVENESS_SAMPLES - 1
+            return (0..last).any { r ->
+                (0..last).any { c ->
+                    val x = (bitmap.width - 1) * c / last
+                    val y = (bitmap.height - 1) * r / last
+                    luminanceOf(bitmap.getPixel(x, y)) > BLACK_LUMINANCE
+                }
+            }
+        }
+
+        private fun luminanceOf(pixel: Int): Int =
+            maxOf(
+                (pixel shr RED_SHIFT) and COLOR_MASK,
+                (pixel shr GREEN_SHIFT) and COLOR_MASK,
+                pixel and COLOR_MASK,
+            )
+
         /** The UVCCamera is private to MultiCameraClient.Camera; reach it reflectively once open. */
         private fun uvcCameraOf(cam: MultiCameraClient.Camera): UVCCamera? =
             runCatching {
@@ -321,6 +349,30 @@ class AusbcCameraController
                 field.isAccessible = true
                 field.get(cam) as? UVCCamera
             }.getOrNull()
+
+        /**
+         * Letterbox the full-size preview TextureView to the stream's aspect ratio with a content
+         * transform, so the picture is never stretched and the surface itself never resizes (which
+         * would blank the native stream during a resolution change).
+         */
+        private fun applyPreviewTransform(size: Resolution) {
+            val view = previewView ?: return
+            if (size.width <= 0 || size.height <= 0) return
+            view.post {
+                val vw = view.width.toFloat()
+                val vh = view.height.toFloat()
+                if (vw <= 0f || vh <= 0f) return@post
+                val viewAspect = vw / vh
+                val streamAspect = size.width.toFloat() / size.height
+                val (scaleX, scaleY) =
+                    if (streamAspect >= viewAspect) {
+                        1f to viewAspect / streamAspect
+                    } else {
+                        streamAspect / viewAspect to 1f
+                    }
+                view.setTransform(Matrix().apply { setScale(scaleX, scaleY, vw / 2f, vh / 2f) })
+            }
+        }
 
         override fun setRotation(degrees: Int) {
             // 3.2.7 has no render-side rotation; rotate the preview surface itself.
@@ -394,5 +446,10 @@ class AusbcCameraController
             const val JPEG_QUALITY = 95
             const val DEFAULT_BIT_RATE = 6_000_000
             const val PREVIEW_BANDWIDTH = 1.0f
+            const val LIVENESS_SAMPLES = 8
+            const val BLACK_LUMINANCE = 12
+            const val RED_SHIFT = 16
+            const val GREEN_SHIFT = 8
+            const val COLOR_MASK = 0xFF
         }
     }
