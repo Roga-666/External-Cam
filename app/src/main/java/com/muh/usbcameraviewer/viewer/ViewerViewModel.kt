@@ -11,6 +11,7 @@ import com.muh.usbcameraviewer.camera.PreviewFactory
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.capture.CaptureStore
 import com.muh.usbcameraviewer.capture.Filenames
+import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.ResolutionPolicy
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,7 +34,13 @@ import javax.inject.Inject
 private const val ROTATION_STEP_DEGREES = 90
 private const val FULL_ROTATION_DEGREES = 360
 private const val RECORDING_TICK_MS = 1_000L
+private const val MIN_RECORDING_BYTES = 200L * 1024 * 1024
+private const val LOW_STORAGE_MESSAGE = "Not enough storage to record video."
 
+// ViewerViewModel exposes one cohesive viewer API (open/close, lifecycle, capture, rotate/mirror,
+// resolution); the lifecycle-across-navigation and low-storage additions push it just past the
+// default function threshold without changing that single responsibility.
+@Suppress("TooManyFunctions")
 @HiltViewModel
 class ViewerViewModel
     @Inject
@@ -41,6 +48,7 @@ class ViewerViewModel
         private val controller: CameraController,
         private val settingsRepository: SettingsRepository,
         private val captureStore: CaptureStore,
+        private val storageChecker: StorageChecker,
         @PreviewFactory val previewFactory: @JvmSuppressWildcards (android.content.Context) -> android.view.View,
     ) : ViewModel() {
         private val _state = MutableStateFlow<CameraUiState>(CameraUiState.NoDevice)
@@ -48,11 +56,6 @@ class ViewerViewModel
 
         private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
         val messages = _messages.asSharedFlow()
-
-        val recordAudioEnabled: StateFlow<Boolean> =
-            settingsRepository.settings
-                .map { it.recordAudio }
-                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
         val keepScreenOn: StateFlow<Boolean> =
             settingsRepository.settings
@@ -66,6 +69,10 @@ class ViewerViewModel
 
         private var tickerJob: Job? = null
 
+        // The preview view handed over by the AndroidView factory, retained so the camera can be
+        // re-opened on foreground when the surface was NOT disposed (app backgrounded, not navigated).
+        private var pendingPreview: Any? = null
+
         init {
             viewModelScope.launch { controller.events.collect(::onEvent) }
             controller.startMonitoring()
@@ -73,9 +80,10 @@ class ViewerViewModel
 
         private fun onEvent(event: CameraEvent) {
             when (event) {
-                is CameraEvent.Attached -> _state.value = CameraUiState.Connecting(event.deviceName)
+                is CameraEvent.Attached -> _state.value = CameraUiState.WaitingPermission(event.deviceName)
                 is CameraEvent.PermissionGranted -> _state.value = CameraUiState.Connecting(event.deviceName)
                 is CameraEvent.PermissionDenied -> _state.value = CameraUiState.PermissionNeeded(event.deviceName)
+                CameraEvent.NoUsbHost -> _state.value = CameraUiState.Error(CameraError.NoUsbHostSupport)
                 is CameraEvent.Opened ->
                     _state.value =
                         CameraUiState.Streaming(
@@ -96,12 +104,51 @@ class ViewerViewModel
 
         /** Called by the AndroidView factory once the preview view exists. */
         fun onPreviewReady(preview: Any) {
+            pendingPreview = preview
+            openPreview(preview)
+        }
+
+        private fun openPreview(preview: Any) {
             viewModelScope.launch {
                 val settings = settingsRepository.settings.first()
                 val preferred =
                     settings.lastResolution
                         .takeIf { settings.resolutionPolicy == ResolutionPolicy.REMEMBER_LAST }
                 controller.open(preview, preferred)
+            }
+        }
+
+        /**
+         * The preview surface was disposed (navigating away from the viewer, e.g. to the gallery).
+         * Finalize any recording, close the native camera, and demote Streaming back to Connecting
+         * so re-entering the viewer recreates the surface and cleanly re-opens.
+         */
+        fun onPreviewDisposed() {
+            pendingPreview = null
+            closeAndDemote()
+        }
+
+        /** App backgrounded (ON_STOP): same close+demote, but keep the retained preview for re-open. */
+        fun onAppBackgrounded() = closeAndDemote()
+
+        /**
+         * App foregrounded (ON_START). When the surface was NOT disposed (composition retained), the
+         * factory won't fire again, so re-open against the retained preview. If the surface was
+         * disposed and recreated, onPreviewReady handles the re-open and pendingPreview is refreshed.
+         */
+        fun onAppForegrounded() {
+            val preview = pendingPreview
+            if (_state.value is CameraUiState.Connecting && preview != null) {
+                openPreview(preview)
+            }
+        }
+
+        private fun closeAndDemote() {
+            val s = _state.value
+            if (s is CameraUiState.Streaming && s.isRecording) stopRecording()
+            controller.close()
+            if (s is CameraUiState.Streaming) {
+                _state.value = CameraUiState.Connecting(s.deviceName)
             }
         }
 
@@ -164,6 +211,10 @@ class ViewerViewModel
         }
 
         private fun startRecording() {
+            if (storageChecker.availableBytes() < MIN_RECORDING_BYTES) {
+                _messages.tryEmit(LOW_STORAGE_MESSAGE)
+                return
+            }
             viewModelScope.launch {
                 val settings = settingsRepository.settings.first()
                 val name = Filenames.video(settings.filenamePrefix, Instant.now())

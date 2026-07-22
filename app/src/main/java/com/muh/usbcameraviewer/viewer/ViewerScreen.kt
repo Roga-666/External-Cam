@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,6 +63,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.muh.usbcameraviewer.R
@@ -72,6 +76,7 @@ import com.muh.usbcameraviewer.camera.Resolution
 
 data class ViewerCallbacks(
     val onPreviewReady: (Any) -> Unit = {},
+    val onPreviewDisposed: () -> Unit = {},
     val onPermissionRetry: () -> Unit = {},
     val onRetryAfterError: () -> Unit = {},
     val onSelectResolution: (Resolution) -> Unit = {},
@@ -81,7 +86,6 @@ data class ViewerCallbacks(
     val onToggleCaptureMode: () -> Unit = {},
     val onOpenGallery: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
-    val recordAudioEnabled: Boolean = false,
     val autoShowResolutionPicker: Boolean = false,
     val previewFactory: (android.content.Context) -> android.view.View = { TextureView(it) },
 )
@@ -93,7 +97,6 @@ fun ViewerScreen(
     viewModel: ViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle()
     val autoShowResolutionPicker by viewModel.autoShowResolutionPicker.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -105,12 +108,28 @@ fun ViewerScreen(
         onDispose { view.keepScreenOn = false }
     }
 
+    // Spec §6: release the native camera while backgrounded, re-open on return.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_STOP -> viewModel.onAppBackgrounded()
+                    Lifecycle.Event.ON_START -> viewModel.onAppForegrounded()
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Box(Modifier.fillMaxSize()) {
         ViewerContent(
             state = state,
             callbacks =
                 ViewerCallbacks(
                     onPreviewReady = viewModel::onPreviewReady,
+                    onPreviewDisposed = viewModel::onPreviewDisposed,
                     onPermissionRetry = viewModel::onPermissionRetry,
                     onRetryAfterError = viewModel::onRetryAfterError,
                     onSelectResolution = viewModel::onSelectResolution,
@@ -120,7 +139,6 @@ fun ViewerScreen(
                     onToggleCaptureMode = viewModel::onToggleCaptureMode,
                     onOpenGallery = onOpenGallery,
                     onOpenSettings = onOpenSettings,
-                    recordAudioEnabled = recordAudioEnabled,
                     autoShowResolutionPicker = autoShowResolutionPicker,
                     previewFactory = viewModel.previewFactory,
                 ),
@@ -163,30 +181,38 @@ fun ViewerContent(
                         }
                     },
                 )
-            is CameraUiState.Connecting ->
-                Column(
-                    Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        stringResource(R.string.connecting_to, state.deviceName),
-                        Modifier.padding(top = 16.dp),
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                }
+            is CameraUiState.WaitingPermission -> ConnectingSpinner(state.deviceName)
+            is CameraUiState.Connecting -> ConnectingSpinner(state.deviceName)
             is CameraUiState.Streaming -> StreamingContent(state, callbacks)
             is CameraUiState.Error ->
                 CenteredMessage(
                     title = state.error.message(),
                     body = "",
+                    // NoUsbHostSupport is unrecoverable; every other error can be retried.
                     action = {
-                        Button(onClick = callbacks.onRetryAfterError) {
-                            Text(stringResource(R.string.retry))
+                        if (state.error != CameraError.NoUsbHostSupport) {
+                            Button(onClick = callbacks.onRetryAfterError) {
+                                Text(stringResource(R.string.retry))
+                            }
                         }
                     },
                 )
         }
+    }
+}
+
+@Composable
+private fun BoxScope.ConnectingSpinner(deviceName: String) {
+    Column(
+        Modifier.align(Alignment.Center),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            stringResource(R.string.connecting_to, deviceName),
+            Modifier.padding(top = 16.dp),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
     }
 }
 
@@ -231,6 +257,11 @@ private fun CenteredMessage(
 
 @Composable
 private fun PreviewSurface(callbacks: ViewerCallbacks) {
+    // onDispose fires when the surface leaves composition (navigating to the gallery), so the
+    // ViewModel can close the native camera and demote to Connecting for a clean re-open on return.
+    DisposableEffect(Unit) {
+        onDispose { callbacks.onPreviewDisposed() }
+    }
     AndroidView(
         factory = { context ->
             callbacks.previewFactory(context).also(callbacks.onPreviewReady)
@@ -252,32 +283,13 @@ private fun StreamingContent(
     // the Connecting -> Streaming transition; this composable only draws the control overlays.
     val context = LocalContext.current
 
-    val audioPermission =
+    val storagePermission =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) { granted -> if (granted) callbacks.onShutter() }
 
-    // Re-entered after the storage grant (or immediately, if storage wasn't needed) so a
-    // storage grant falls through to the audio check instead of bypassing it.
-    fun proceedAfterStorage() {
-        val needsAudio =
-            state.captureMode == CaptureMode.VIDEO &&
-                !state.isRecording &&
-                callbacks.recordAudioEnabled &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
-                PackageManager.PERMISSION_GRANTED
-        if (needsAudio) {
-            audioPermission.launch(Manifest.permission.RECORD_AUDIO)
-        } else {
-            callbacks.onShutter()
-        }
-    }
-
-    val storagePermission =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission(),
-        ) { granted -> if (granted) proceedAfterStorage() }
-
+    // Pre-Q needs WRITE_EXTERNAL_STORAGE to publish captures; Q+ uses scoped storage. Audio is
+    // not requested — AUSBC 3.2.7 records video-only, so RECORD_AUDIO would be misleading.
     val shutter = {
         val needsStorage =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
@@ -286,7 +298,7 @@ private fun StreamingContent(
         if (needsStorage) {
             storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         } else {
-            proceedAfterStorage()
+            callbacks.onShutter()
         }
     }
     Box(Modifier.fillMaxSize()) {

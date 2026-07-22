@@ -56,7 +56,7 @@ class AusbcCameraController
         override fun startMonitoring() {
             if (client != null) return
             if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
-                _events.tryEmit(CameraEvent.OpenFailed("no-usb-host"))
+                _events.tryEmit(CameraEvent.NoUsbHost)
                 return
             }
             // 3.2.7: IDeviceConnectCallBack is a top-level callback interface
@@ -75,6 +75,8 @@ class AusbcCameraController
                         override fun onDetachDec(device: UsbDevice?) {
                             if (device == pendingDevice) {
                                 teardownCamera()
+                                // Device is truly gone: the control block is now stale.
+                                ctrlBlock = null
                                 pendingDevice = null
                                 _events.tryEmit(CameraEvent.Detached)
                             }
@@ -94,11 +96,15 @@ class AusbcCameraController
                             ctrlBlock: USBMonitor.UsbControlBlock?,
                         ) {
                             teardownCamera()
+                            // Device disconnected: drop the stale control block.
+                            this@AusbcCameraController.ctrlBlock = null
                             _events.tryEmit(CameraEvent.Detached)
                         }
 
                         override fun onCancelDev(device: UsbDevice?) {
                             device ?: return
+                            // Permission cancelled: no valid control block for this device.
+                            ctrlBlock = null
                             _events.tryEmit(CameraEvent.PermissionDenied(device.displayName()))
                         }
                     },
@@ -122,6 +128,10 @@ class AusbcCameraController
             preview: Any,
             preferred: Resolution?,
         ) {
+            // Close any camera opened earlier before constructing a new one, so a
+            // re-open (returning from the gallery, foregrounding) never double-opens
+            // or leaks the native camera. ctrlBlock is preserved by teardownCamera().
+            teardownCamera()
             val device = pendingDevice
             val block = ctrlBlock
             if (device == null || block == null) {

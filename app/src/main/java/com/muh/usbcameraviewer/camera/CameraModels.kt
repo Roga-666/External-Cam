@@ -23,6 +23,14 @@ sealed interface CameraUiState {
 
     data class PermissionNeeded(val deviceName: String) : CameraUiState
 
+    /**
+     * Device attached, awaiting the system USB-permission decision. Shows the same
+     * spinner as [Connecting] but must NOT compose the preview surface: opening the
+     * camera before [CameraEvent.PermissionGranted] delivers a control block would
+     * fire a bogus OpenFailed.
+     */
+    data class WaitingPermission(val deviceName: String) : CameraUiState
+
     data class Connecting(val deviceName: String) : CameraUiState
 
     data class Streaming(
@@ -44,6 +52,9 @@ sealed interface CameraEvent {
     data class Attached(val deviceName: String) : CameraEvent
 
     data object Detached : CameraEvent
+
+    /** This device has no USB host (OTG) support; unrecoverable. */
+    data object NoUsbHost : CameraEvent
 
     data class PermissionGranted(val deviceName: String) : CameraEvent
 

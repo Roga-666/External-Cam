@@ -3,12 +3,14 @@ package com.muh.usbcameraviewer.viewer
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import app.cash.turbine.test
 import com.muh.usbcameraviewer.MainDispatcherRule
+import com.muh.usbcameraviewer.camera.CameraError
 import com.muh.usbcameraviewer.camera.CameraEvent
 import com.muh.usbcameraviewer.camera.CameraUiState
 import com.muh.usbcameraviewer.camera.CaptureMode
 import com.muh.usbcameraviewer.camera.FakeCameraController
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.capture.CaptureStore
+import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -39,12 +41,17 @@ class FakeCaptureStore(private val root: File) : CaptureStore {
     ): String = "content://fake/video/$displayName".also { published += it }
 }
 
+class FakeStorageChecker(var available: Long = Long.MAX_VALUE) : StorageChecker {
+    override fun availableBytes(): Long = available
+}
+
 class ViewerViewModelTest {
     @get:Rule val mainDispatcher = MainDispatcherRule()
 
     @get:Rule val tmp = TemporaryFolder()
 
     private val fake = FakeCameraController()
+    private val storage = FakeStorageChecker()
     private val res720 = Resolution(1280, 720)
     private val res1080 = Resolution(1920, 1080)
 
@@ -61,6 +68,7 @@ class ViewerViewModelTest {
             fake,
             settingsRepo(),
             FakeCaptureStore(tmp.root),
+            storage,
         ) { error("no view in unit test") }
 
     @Test
@@ -78,8 +86,9 @@ class ViewerViewModelTest {
             vm.state.test {
                 assertEquals(CameraUiState.NoDevice, awaitItem())
                 fake.emit(CameraEvent.Attached("Endoscope"))
-                assertEquals(CameraUiState.Connecting("Endoscope"), awaitItem())
+                assertEquals(CameraUiState.WaitingPermission("Endoscope"), awaitItem())
                 fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+                assertEquals(CameraUiState.Connecting("Endoscope"), awaitItem())
                 vm.onPreviewReady(preview = "texture-view")
                 fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
                 val streaming = awaitItem() as CameraUiState.Streaming
@@ -127,7 +136,10 @@ class ViewerViewModelTest {
     fun `selecting resolution forwards to controller and persists`() =
         runTest {
             val settings = settingsRepo()
-            val vm = ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root)) { error("no view in unit test") }
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
             fake.emit(CameraEvent.Attached("Endoscope"))
             fake.emit(CameraEvent.PermissionGranted("Endoscope"))
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
@@ -140,7 +152,10 @@ class ViewerViewModelTest {
         runTest {
             val settings = settingsRepo()
             settings.setLastResolution(res1080)
-            val vm = ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root)) { error("no view in unit test") }
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
             fake.emit(CameraEvent.Attached("Endoscope"))
             fake.emit(CameraEvent.PermissionGranted("Endoscope"))
             vm.onPreviewReady(preview = "texture-view")
@@ -217,7 +232,7 @@ class ViewerViewModelTest {
     fun `detach while recording stops and publishes partial file`() =
         runTest {
             val captureStore = FakeCaptureStore(tmp.root)
-            val vm = ViewerViewModel(fake, settingsRepo(), captureStore) { error("no view in unit test") }
+            val vm = ViewerViewModel(fake, settingsRepo(), captureStore, storage) { error("no view in unit test") }
             fake.emit(CameraEvent.Attached("Endoscope"))
             fake.emit(CameraEvent.PermissionGranted("Endoscope"))
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
@@ -229,5 +244,82 @@ class ViewerViewModelTest {
             // file was finalized+published.
             assertEquals(1, fake.stopRecordingCalls)
             assertTrue(captureStore.published.any { it.endsWith(".mp4") })
+        }
+
+    @Test
+    fun `attach emits WaitingPermission before permission is granted`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            assertEquals(CameraUiState.WaitingPermission("Endoscope"), vm.state.value)
+        }
+
+    @Test
+    fun `no usb host support maps to unrecoverable Error`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.NoUsbHost)
+            assertEquals(CameraUiState.Error(CameraError.NoUsbHostSupport), vm.state.value)
+        }
+
+    @Test
+    fun `low storage blocks recording and emits message`() =
+        runTest {
+            storage.available = 10L * 1024 * 1024 // 10 MB, below the 200 MB floor
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            vm.onToggleCaptureMode()
+            vm.messages.test {
+                vm.onShutter()
+                assertTrue(awaitItem().isNotBlank())
+            }
+            assertFalse((vm.state.value as CameraUiState.Streaming).isRecording)
+            assertTrue(fake.recordingStarts.isEmpty())
+        }
+
+    @Test
+    fun `preview disposed closes camera and demotes Streaming to Connecting`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            vm.onPreviewDisposed()
+            assertTrue(fake.closed)
+            assertEquals(CameraUiState.Connecting("Endoscope"), vm.state.value)
+        }
+
+    @Test
+    fun `preview disposed while recording finalizes the recording`() =
+        runTest {
+            val captureStore = FakeCaptureStore(tmp.root)
+            val vm = ViewerViewModel(fake, settingsRepo(), captureStore, storage) { error("no view in unit test") }
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            vm.onToggleCaptureMode()
+            vm.onShutter() // start recording
+            vm.onPreviewDisposed()
+            assertEquals(1, fake.stopRecordingCalls)
+            assertTrue(captureStore.published.any { it.endsWith(".mp4") })
+            assertEquals(CameraUiState.Connecting("Endoscope"), vm.state.value)
+        }
+
+    @Test
+    fun `backgrounding closes camera and foregrounding re-opens against retained preview`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            vm.onPreviewReady(preview = "texture-view")
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            assertEquals(1, fake.openCalls.size)
+            vm.onAppBackgrounded()
+            assertTrue(fake.closed)
+            assertEquals(CameraUiState.Connecting("Endoscope"), vm.state.value)
+            vm.onAppForegrounded()
+            assertEquals(2, fake.openCalls.size)
         }
 }

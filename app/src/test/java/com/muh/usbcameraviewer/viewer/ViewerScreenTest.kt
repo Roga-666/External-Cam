@@ -66,6 +66,26 @@ class ViewerScreenTest {
     }
 
     @Test
+    fun waitingPermission_showsSpinnerButDoesNotCreatePreview() {
+        var previewReady = false
+        setContent(
+            CameraUiState.WaitingPermission("Endoscope"),
+            ViewerCallbacks(onPreviewReady = { previewReady = true }),
+        )
+        // Same reassuring spinner as Connecting, but the preview surface must NOT be composed:
+        // opening the camera before the USB permission is granted fires a bogus OpenFailed.
+        compose.onNodeWithText("Connecting to Endoscope…").assertIsDisplayed()
+        assertFalse(previewReady)
+    }
+
+    @Test
+    fun noUsbHostError_hidesRetry() {
+        setContent(CameraUiState.Error(CameraError.NoUsbHostSupport))
+        compose.onNodeWithText("This phone does not support USB OTG host mode.").assertIsDisplayed()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
+    @Test
     fun streaming_showsShutterAndControls() {
         setContent(streaming)
         compose.onNodeWithContentDescription("Take photo").assertIsDisplayed()
