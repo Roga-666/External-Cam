@@ -76,6 +76,10 @@ Quality gates: `./gradlew test detekt ktlintCheck lint`.
     keyAlias=...
     keyPassword=...
 
+`build.sh` also picks up global `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASS`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASS` environment variables (e.g. from your
+shell profile) when no `keystore.properties`/`UCV_*` vars are set.
+
 **CI releases:** pushing a tag matching `v*` (e.g. `git tag v1.0.0 && git push origin v1.0.0`) runs the quality gates and attaches `usb-camera-viewer-<tag>.apk` to a GitHub Release. For a *signed* CI APK add repository secrets:
 
 | Secret | Value |

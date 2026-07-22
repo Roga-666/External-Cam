@@ -25,6 +25,15 @@ for arg in "$@"; do
     esac
 done
 
+# Signing fallback: map global ANDROID_* keystore vars (e.g. from ~/.zshrc)
+# to the UCV_* vars gradle reads. Explicit UCV_* / keystore.properties win.
+if [[ -z "${UCV_KEYSTORE_FILE:-}" && -n "${ANDROID_KEYSTORE:-}" && -f "${ANDROID_KEYSTORE:-}" ]]; then
+    export UCV_KEYSTORE_FILE="$ANDROID_KEYSTORE"
+    export UCV_KEYSTORE_PASSWORD="${ANDROID_KEYSTORE_PASS:-}"
+    export UCV_KEY_ALIAS="${ANDROID_KEY_ALIAS:-}"
+    export UCV_KEY_PASSWORD="${ANDROID_KEY_PASS:-${ANDROID_KEYSTORE_PASS:-}}"
+fi
+
 # Gradle 8.14 supports JDK 17-23; system default may be newer.
 jdk_ok() { [[ -x "$1/bin/java" ]] && "$1/bin/java" -version 2>&1 | head -1 | grep -qE 'version "(1[7-9]|2[0-3])[."]'; }
 if ! jdk_ok "${JAVA_HOME:-/nonexistent}"; then
