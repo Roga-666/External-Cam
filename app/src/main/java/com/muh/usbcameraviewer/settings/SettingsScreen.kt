@@ -37,6 +37,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.muh.usbcameraviewer.BuildConfig
 import com.muh.usbcameraviewer.R
 
+// Single Compose screen laying out every settings section; splitting it would scatter
+// closely related UI without reducing complexity, so LongMethod is suppressed here.
+@Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -114,9 +117,10 @@ fun SettingsScreen(
                 onValueChange = { prefix = it },
                 label = { Text(stringResource(R.string.settings_filename_prefix)) },
                 singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
             )
             LaunchedEffect(prefix) {
                 kotlinx.coroutines.delay(400) // debounce
@@ -145,7 +149,11 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun RadioRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+private fun RadioRow(
+    label: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()

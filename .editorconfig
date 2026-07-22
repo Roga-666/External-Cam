@@ -1,0 +1,10 @@
+root = true
+
+[*.{kt,kts}]
+# Match detekt's default MaxLineLength (120) so ktlintFormat and detekt agree
+# on where to wrap instead of fighting each other.
+max_line_length = 120
+# Composable functions follow Jetpack Compose's PascalCase convention
+# (ViewerScreen, StreamingContent, UcvTheme, ...), which the ktlint
+# function-naming rule otherwise flags as invalid.
+ktlint_function_naming_ignore_when_annotated_with = Composable

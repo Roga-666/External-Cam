@@ -1,12 +1,11 @@
 package com.muh.usbcameraviewer.capture
 
-import java.time.Instant
-import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneId
 
 class FilenamesTest {
-
     private val instant = Instant.parse("2026-07-22T14:05:09Z")
     private val zone = ZoneId.of("UTC")
 

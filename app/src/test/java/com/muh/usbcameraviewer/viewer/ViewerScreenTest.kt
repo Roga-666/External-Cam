@@ -21,16 +21,19 @@ import org.robolectric.annotation.Config
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34])
 class ViewerScreenTest {
-
     @get:Rule val compose = createComposeRule()
 
-    private val streaming = CameraUiState.Streaming(
-        deviceName = "Endoscope",
-        resolution = Resolution(1280, 720),
-        availableResolutions = listOf(Resolution(1280, 720), Resolution(1920, 1080)),
-    )
+    private val streaming =
+        CameraUiState.Streaming(
+            deviceName = "Endoscope",
+            resolution = Resolution(1280, 720),
+            availableResolutions = listOf(Resolution(1280, 720), Resolution(1920, 1080)),
+        )
 
-    private fun setContent(state: CameraUiState, callbacks: ViewerCallbacks = ViewerCallbacks()) {
+    private fun setContent(
+        state: CameraUiState,
+        callbacks: ViewerCallbacks = ViewerCallbacks(),
+    ) {
         compose.setContent { UcvTheme { ViewerContent(state = state, callbacks = callbacks) } }
     }
 

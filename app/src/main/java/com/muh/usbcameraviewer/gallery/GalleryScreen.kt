@@ -80,11 +80,12 @@ fun GalleryScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (val s = state) {
                 GalleryUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                GalleryUiState.Empty -> Text(
-                    stringResource(R.string.gallery_empty),
-                    Modifier.align(Alignment.Center).padding(32.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                GalleryUiState.Empty ->
+                    Text(
+                        stringResource(R.string.gallery_empty),
+                        Modifier.align(Alignment.Center).padding(32.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
                 is GalleryUiState.Content -> {
                     GalleryGrid(items = s.items, onOpen = { viewerIndex = it })
                     viewerIndex?.let { index ->
@@ -102,7 +103,10 @@ fun GalleryScreen(
 }
 
 @Composable
-private fun GalleryGrid(items: List<MediaItem>, onOpen: (Int) -> Unit) {
+private fun GalleryGrid(
+    items: List<MediaItem>,
+    onOpen: (Int) -> Unit,
+) {
     val context = LocalContext.current
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
@@ -117,11 +121,12 @@ private fun GalleryGrid(items: List<MediaItem>, onOpen: (Int) -> Unit) {
                     .clickable { onOpen(index) },
             ) {
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(item.uri)
-                        .apply { if (item.isVideo) decoderFactory(VideoFrameDecoder.Factory()) }
-                        .crossfade(true)
-                        .build(),
+                    model =
+                        ImageRequest.Builder(context)
+                            .data(item.uri)
+                            .apply { if (item.isVideo) decoderFactory(VideoFrameDecoder.Factory()) }
+                            .crossfade(true)
+                            .build(),
                     contentDescription = item.displayName,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -160,11 +165,12 @@ private fun FullScreenViewer(
         val current = items[pagerState.currentPage.coerceAtMost(items.lastIndex)]
         androidx.compose.foundation.layout.Row(Modifier.align(Alignment.TopEnd)) {
             IconButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = if (current.isVideo) "video/mp4" else "image/jpeg"
-                    putExtra(Intent.EXTRA_STREAM, android.net.Uri.parse(current.uri))
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
+                val send =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = if (current.isVideo) "video/mp4" else "image/jpeg"
+                        putExtra(Intent.EXTRA_STREAM, android.net.Uri.parse(current.uri))
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
                 context.startActivity(Intent.createChooser(send, null))
             }) {
                 Icon(Icons.Filled.Share, stringResource(R.string.cd_share), tint = Color.White)
@@ -211,22 +217,26 @@ private fun ZoomableImage(item: MediaItem) {
     AsyncImage(
         model = item.uri,
         contentDescription = item.displayName,
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 6f)
-                    offsetX += pan.x
-                    offsetY += pan.y
-                    if (scale == 1f) { offsetX = 0f; offsetY = 0f }
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 6f)
+                        offsetX += pan.x
+                        offsetY += pan.y
+                        if (scale == 1f) {
+                            offsetX = 0f
+                            offsetY = 0f
+                        }
+                    }
                 }
-            }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = offsetX
-                translationY = offsetY
-            },
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                },
     )
 }
 
@@ -237,10 +247,11 @@ private fun VideoPlayer(item: MediaItem) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(item.uri)
-                .decoderFactory(VideoFrameDecoder.Factory())
-                .build(),
+            model =
+                ImageRequest.Builder(context)
+                    .data(item.uri)
+                    .decoderFactory(VideoFrameDecoder.Factory())
+                    .build(),
             contentDescription = item.displayName,
             modifier = Modifier.fillMaxSize(),
         )

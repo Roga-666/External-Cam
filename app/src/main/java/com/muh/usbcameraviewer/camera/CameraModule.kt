@@ -18,7 +18,6 @@ annotation class PreviewFactory
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class CameraModule {
-
     @Binds
     @Singleton
     abstract fun bindCameraController(impl: AusbcCameraController): CameraController

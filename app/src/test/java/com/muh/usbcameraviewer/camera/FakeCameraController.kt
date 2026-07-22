@@ -1,10 +1,9 @@
 package com.muh.usbcameraviewer.camera
 
-import java.io.File
 import kotlinx.coroutines.flow.MutableSharedFlow
+import java.io.File
 
 class FakeCameraController : CameraController {
-
     private val _events = MutableSharedFlow<CameraEvent>(extraBufferCapacity = 16)
     override val events = _events
 
@@ -26,18 +25,48 @@ class FakeCameraController : CameraController {
         check(_events.tryEmit(event)) { "event buffer full" }
     }
 
-    override fun startMonitoring() { monitoring = true }
-    override fun stopMonitoring() { monitoring = false }
-    override fun requestPermission() { permissionRequests++ }
-    override fun open(preview: Any, preferred: Resolution?) { openCalls += preview to preferred }
-    override fun close() { closed = true }
-    override fun setResolution(resolution: Resolution) { resolutionCalls += resolution }
-    override fun setRotation(degrees: Int) { rotationCalls += degrees }
-    override fun setMirror(mirrored: Boolean) { mirrorCalls += mirrored }
+    override fun startMonitoring() {
+        monitoring = true
+    }
+
+    override fun stopMonitoring() {
+        monitoring = false
+    }
+
+    override fun requestPermission() {
+        permissionRequests++
+    }
+
+    override fun open(
+        preview: Any,
+        preferred: Resolution?,
+    ) {
+        openCalls += preview to preferred
+    }
+
+    override fun close() {
+        closed = true
+    }
+
+    override fun setResolution(resolution: Resolution) {
+        resolutionCalls += resolution
+    }
+
+    override fun setRotation(degrees: Int) {
+        rotationCalls += degrees
+    }
+
+    override fun setMirror(mirrored: Boolean) {
+        mirrorCalls += mirrored
+    }
 
     override suspend fun capturePhoto(target: File): Result<File> = photoResult(target)
 
-    override suspend fun startRecording(target: File, withAudio: Boolean, bitRate: Int): Result<Unit> {
+    override suspend fun startRecording(
+        target: File,
+        withAudio: Boolean,
+        bitRate: Int,
+    ): Result<Unit> {
         recordingStarts += Triple(target, withAudio, bitRate)
         return startRecordingResult
     }

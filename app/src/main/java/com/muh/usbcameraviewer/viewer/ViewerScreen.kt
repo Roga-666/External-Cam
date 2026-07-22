@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Flip
@@ -48,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -104,32 +104,37 @@ fun ViewerScreen(
     Box(Modifier.fillMaxSize()) {
         ViewerContent(
             state = state,
-            callbacks = ViewerCallbacks(
-                onPreviewReady = viewModel::onPreviewReady,
-                onPermissionRetry = viewModel::onPermissionRetry,
-                onRetryAfterError = viewModel::onRetryAfterError,
-                onSelectResolution = viewModel::onSelectResolution,
-                onRotate = viewModel::onRotate,
-                onToggleMirror = viewModel::onToggleMirror,
-                onShutter = viewModel::onShutter,
-                onToggleCaptureMode = viewModel::onToggleCaptureMode,
-                onOpenGallery = onOpenGallery,
-                onOpenSettings = onOpenSettings,
-                recordAudioEnabled = recordAudioEnabled,
-                autoShowResolutionPicker = autoShowResolutionPicker,
-                previewFactory = viewModel.previewFactory,
-            ),
+            callbacks =
+                ViewerCallbacks(
+                    onPreviewReady = viewModel::onPreviewReady,
+                    onPermissionRetry = viewModel::onPermissionRetry,
+                    onRetryAfterError = viewModel::onRetryAfterError,
+                    onSelectResolution = viewModel::onSelectResolution,
+                    onRotate = viewModel::onRotate,
+                    onToggleMirror = viewModel::onToggleMirror,
+                    onShutter = viewModel::onShutter,
+                    onToggleCaptureMode = viewModel::onToggleCaptureMode,
+                    onOpenGallery = onOpenGallery,
+                    onOpenSettings = onOpenSettings,
+                    recordAudioEnabled = recordAudioEnabled,
+                    autoShowResolutionPicker = autoShowResolutionPicker,
+                    previewFactory = viewModel.previewFactory,
+                ),
         )
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
 }
 
 @Composable
-fun ViewerContent(state: CameraUiState, callbacks: ViewerCallbacks) {
+fun ViewerContent(
+    state: CameraUiState,
+    callbacks: ViewerCallbacks,
+) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
     ) {
         // Single call site: the preview surface must survive the Connecting -> Streaming
         // transition unchanged, otherwise Compose disposes/recreates the AndroidView and
@@ -138,53 +143,58 @@ fun ViewerContent(state: CameraUiState, callbacks: ViewerCallbacks) {
             PreviewSurface(callbacks)
         }
         when (state) {
-            CameraUiState.NoDevice -> CenteredMessage(
-                icon = { Icon(Icons.Filled.Usb, contentDescription = null, Modifier.size(64.dp)) },
-                title = stringResource(R.string.no_device_title),
-                body = stringResource(R.string.no_device_body),
-            )
-            is CameraUiState.PermissionNeeded -> CenteredMessage(
-                title = stringResource(R.string.permission_needed_title),
-                body = stringResource(R.string.permission_needed_body, state.deviceName),
-                action = {
-                    Button(onClick = callbacks.onPermissionRetry) {
-                        Text(stringResource(R.string.grant_permission))
-                    }
-                },
-            )
-            is CameraUiState.Connecting -> Column(
-                Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                CircularProgressIndicator()
-                Text(
-                    stringResource(R.string.connecting_to, state.deviceName),
-                    Modifier.padding(top = 16.dp),
-                    color = MaterialTheme.colorScheme.onBackground,
+            CameraUiState.NoDevice ->
+                CenteredMessage(
+                    icon = { Icon(Icons.Filled.Usb, contentDescription = null, Modifier.size(64.dp)) },
+                    title = stringResource(R.string.no_device_title),
+                    body = stringResource(R.string.no_device_body),
                 )
-            }
+            is CameraUiState.PermissionNeeded ->
+                CenteredMessage(
+                    title = stringResource(R.string.permission_needed_title),
+                    body = stringResource(R.string.permission_needed_body, state.deviceName),
+                    action = {
+                        Button(onClick = callbacks.onPermissionRetry) {
+                            Text(stringResource(R.string.grant_permission))
+                        }
+                    },
+                )
+            is CameraUiState.Connecting ->
+                Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        stringResource(R.string.connecting_to, state.deviceName),
+                        Modifier.padding(top = 16.dp),
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
             is CameraUiState.Streaming -> StreamingContent(state, callbacks)
-            is CameraUiState.Error -> CenteredMessage(
-                title = state.error.message(),
-                body = "",
-                action = {
-                    Button(onClick = callbacks.onRetryAfterError) {
-                        Text(stringResource(R.string.retry))
-                    }
-                },
-            )
+            is CameraUiState.Error ->
+                CenteredMessage(
+                    title = state.error.message(),
+                    body = "",
+                    action = {
+                        Button(onClick = callbacks.onRetryAfterError) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    },
+                )
         }
     }
 }
 
 @Composable
-private fun CameraError.message(): String = when (this) {
-    CameraError.NoUsbHostSupport -> stringResource(R.string.error_no_usb_host)
-    CameraError.PermissionDenied -> stringResource(R.string.permission_needed_title)
-    is CameraError.OpenFailed -> stringResource(R.string.error_open_failed)
-    CameraError.UnsupportedDevice -> stringResource(R.string.error_unsupported_device)
-    is CameraError.RecordingFailed -> stringResource(R.string.error_recording_failed, reason)
-}
+private fun CameraError.message(): String =
+    when (this) {
+        CameraError.NoUsbHostSupport -> stringResource(R.string.error_no_usb_host)
+        CameraError.PermissionDenied -> stringResource(R.string.permission_needed_title)
+        is CameraError.OpenFailed -> stringResource(R.string.error_open_failed)
+        CameraError.UnsupportedDevice -> stringResource(R.string.error_unsupported_device)
+        is CameraError.RecordingFailed -> stringResource(R.string.error_recording_failed, reason)
+    }
 
 @Composable
 private fun CenteredMessage(
@@ -194,9 +204,10 @@ private fun CenteredMessage(
     action: @Composable () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -224,23 +235,32 @@ private fun PreviewSurface(callbacks: ViewerCallbacks) {
     )
 }
 
+// Renders the full overlay (resolution picker, rotate/mirror, shutter, mode toggle,
+// recording timer) as one Compose function so the layout stays readable top-to-bottom;
+// splitting it into sub-composables would scatter closely related layout code.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
-private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCallbacks) {
+private fun StreamingContent(
+    state: CameraUiState.Streaming,
+    callbacks: ViewerCallbacks,
+) {
     // PreviewSurface is rendered once by the caller (ViewerContent) so its identity survives
     // the Connecting -> Streaming transition; this composable only draws the control overlays.
     val context = LocalContext.current
 
-    val audioPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) callbacks.onShutter() }
+    val audioPermission =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted -> if (granted) callbacks.onShutter() }
 
     // Re-entered after the storage grant (or immediately, if storage wasn't needed) so a
     // storage grant falls through to the audio check instead of bypassing it.
     fun proceedAfterStorage() {
-        val needsAudio = state.captureMode == CaptureMode.VIDEO &&
-            !state.isRecording &&
-            callbacks.recordAudioEnabled &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+        val needsAudio =
+            state.captureMode == CaptureMode.VIDEO &&
+                !state.isRecording &&
+                callbacks.recordAudioEnabled &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
                 PackageManager.PERMISSION_GRANTED
         if (needsAudio) {
             audioPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -249,13 +269,15 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
         }
     }
 
-    val storagePermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) proceedAfterStorage() }
+    val storagePermission =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted -> if (granted) proceedAfterStorage() }
 
     val shutter = {
-        val needsStorage = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+        val needsStorage =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
                 PackageManager.PERMISSION_GRANTED
         if (needsStorage) {
             storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -284,9 +306,10 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
                     AssistChip(
                         onClick = { resMenu = true },
                         label = { Text(state.resolution.toString()) },
-                        modifier = Modifier.semantics {
-                            contentDescription = pickResolutionDescription
-                        },
+                        modifier =
+                            Modifier.semantics {
+                                contentDescription = pickResolutionDescription
+                            },
                     )
                     DropdownMenu(expanded = resMenu, onDismissRequest = { resMenu = false }) {
                         state.availableResolutions.forEach { res ->
@@ -338,9 +361,10 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
                         AsyncImage(
                             model = state.lastCaptureUri,
                             contentDescription = stringResource(R.string.cd_open_gallery),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape),
+                            modifier =
+                                Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape),
                         )
                     } else {
                         Icon(
@@ -358,9 +382,10 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
                     if (state.captureMode == CaptureMode.VIDEO) {
                         Icon(
                             Icons.Filled.FiberManualRecord,
-                            contentDescription = stringResource(
-                                if (state.isRecording) R.string.cd_record_stop else R.string.cd_record_start,
-                            ),
+                            contentDescription =
+                                stringResource(
+                                    if (state.isRecording) R.string.cd_record_stop else R.string.cd_record_start,
+                                ),
                             tint = Color(0xFFFF5252),
                         )
                     } else {
@@ -384,14 +409,14 @@ private fun StreamingContent(state: CameraUiState.Streaming, callbacks: ViewerCa
                 leadingIcon = {
                     Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = Color(0xFFFF5252))
                 },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .systemBarsPadding()
-                    .padding(top = 8.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .systemBarsPadding()
+                        .padding(top = 8.dp),
             )
         }
     }
 }
 
-internal fun formatElapsed(seconds: Long): String =
-    "%02d:%02d".format(seconds / 60, seconds % 60)
+internal fun formatElapsed(seconds: Long): String = "%02d:%02d".format(seconds / 60, seconds % 60)
