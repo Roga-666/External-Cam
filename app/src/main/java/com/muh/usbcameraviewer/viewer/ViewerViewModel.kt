@@ -36,6 +36,8 @@ private const val FULL_ROTATION_DEGREES = 360
 private const val RECORDING_TICK_MS = 1_000L
 private const val MIN_RECORDING_BYTES = 200L * 1024 * 1024
 private const val LOW_STORAGE_MESSAGE = "Not enough storage to record video."
+private const val CAMERA_PERMISSION_DENIED_MESSAGE =
+    "Camera permission is required to view the USB camera."
 
 // ViewerViewModel exposes one cohesive viewer API (open/close, lifecycle, capture, rotate/mirror,
 // resolution); the lifecycle-across-navigation and low-storage additions push it just past the
@@ -106,6 +108,19 @@ class ViewerViewModel
         fun onPreviewReady(preview: Any) {
             pendingPreview = preview
             openPreview(preview)
+        }
+
+        /**
+         * The CAMERA runtime permission result. Android gates USB Video Class access behind
+         * CAMERA, so a granted result re-triggers the USB permission request for the pending
+         * device; a denied result surfaces a message and leaves the user on the current screen.
+         */
+        fun onCameraPermissionResult(granted: Boolean) {
+            if (granted) {
+                controller.requestPermission()
+            } else {
+                _messages.tryEmit(CAMERA_PERMISSION_DENIED_MESSAGE)
+            }
         }
 
         private fun openPreview(preview: Any) {

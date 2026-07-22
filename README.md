@@ -25,7 +25,7 @@
 - **In-app gallery** — grid with video badges, pinch-zoom viewer, share, delete
 - **Resolution picker, rotate & mirror** (preview transforms), keep-screen-on
 - **Dark, camera-first UI** — Jetpack Compose + Material 3, edge-to-edge
-- **Fully offline** — no INTERNET permission, no analytics, no ads
+- **Fully offline** — no INTERNET permission, no analytics, no ads (the one runtime permission is Camera, which Android mandates for USB video devices)
 
 ## Screenshots
 
@@ -43,7 +43,7 @@
 
     ./build.sh debug --install
 
-**First run:** plug the camera into the phone (USB-C, or via an OTG adapter) → Android asks to open USB Camera Viewer → tap Allow on the USB permission dialog → live picture.
+**First run:** plug the camera into the phone (USB-C, or via an OTG adapter) → Android asks to open USB Camera Viewer → grant the **Camera** permission (Android requires it to access any USB video device) → tap Allow on the USB permission dialog → live picture.
 
 ## Usage
 
@@ -57,6 +57,7 @@
 |---|---|
 | "Plug in your camera" never changes | Phone must support USB host/OTG (the app tells you if it doesn't). Try a data-capable cable/adapter, not charge-only. |
 | No permission dialog after replug | Unplug, wait a second, replug; or tap **Grant permission** on the permission screen. |
+| Stuck on "Connecting…" forever | The Camera permission was denied. Grant it in Android Settings → Apps → USB Camera Viewer → Permissions; Android blocks USB video access without it. |
 | Camera opens but no picture | Some non-UVC cameras enumerate but aren't supported — verify the camera is UVC-class. |
 | Videos have no sound | By design — see Known limitations. |
 

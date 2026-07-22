@@ -110,6 +110,27 @@ class ViewerViewModelTest {
         }
 
     @Test
+    fun `camera permission granted re-requests USB permission`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            vm.onCameraPermissionResult(granted = true)
+            assertEquals(1, fake.permissionRequests)
+        }
+
+    @Test
+    fun `camera permission denied emits a message and does not re-request`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            vm.messages.test {
+                vm.onCameraPermissionResult(granted = false)
+                assertTrue(awaitItem().isNotBlank())
+            }
+            assertEquals(0, fake.permissionRequests)
+        }
+
+    @Test
     fun `detach from any state returns to NoDevice`() =
         runTest {
             val vm = vm()

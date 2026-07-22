@@ -2,7 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <!-- Not required at install time: the "camera" here is the external USB device,
+         but Android gates USB Video Class access behind the CAMERA runtime permission. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!-- Android 10+ requires CAMERA runtime permission to open a USB Video Class device. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />

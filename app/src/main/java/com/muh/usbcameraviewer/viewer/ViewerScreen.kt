@@ -102,6 +102,20 @@ fun ViewerScreen(
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
+    // Android gates USB Video Class access behind the CAMERA runtime permission.
+    // Request it up front so a device attach can complete its USB-permission grant.
+    val context = LocalContext.current
+    val cameraPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            viewModel.onCameraPermissionResult(granted)
+        }
+    LaunchedEffect(Unit) {
+        val granted =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        if (!granted) cameraPermission.launch(Manifest.permission.CAMERA)
+    }
+
     val view = LocalView.current
     DisposableEffect(keepScreenOn, state is CameraUiState.Streaming) {
         view.keepScreenOn = keepScreenOn && state is CameraUiState.Streaming
