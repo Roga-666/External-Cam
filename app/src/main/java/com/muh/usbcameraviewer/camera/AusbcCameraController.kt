@@ -1,8 +1,13 @@
 package com.muh.usbcameraviewer.camera
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
+import android.os.Build
 import android.util.Log
 import android.view.View
 import com.jiangdg.ausbc.MultiCameraClient
@@ -20,6 +25,29 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
+
+/**
+ * Upgrades flag-less `registerReceiver` calls with [Context.RECEIVER_NOT_EXPORTED].
+ *
+ * USBMonitor (inside libausbc 3.2.7) registers its USB-permission receiver with the
+ * two-argument `registerReceiver`, which throws SecurityException on Android 14+
+ * (targetSdk 34+) because the filter contains a non-system action. Wrapping the
+ * Context handed to [MultiCameraClient] fixes this without touching the library.
+ * NOT_EXPORTED is safe: the filter's system broadcasts (USB attach/detach) are
+ * delivered regardless, and the permission broadcast originates from this app's
+ * own PendingIntent.
+ */
+internal class ReceiverFlagContext(base: Context) : ContextWrapper(base) {
+    override fun registerReceiver(
+        receiver: BroadcastReceiver?,
+        filter: IntentFilter?,
+    ): Intent? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            super.registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            super.registerReceiver(receiver, filter)
+        }
+}
 
 /**
  * The only class that talks to AUSBC (`com.jiangdg.*` / `com.serenegiant.*`).
@@ -63,7 +91,7 @@ class AusbcCameraController
             // (com.jiangdg.ausbc.callback), not nested in MultiCameraClient.
             client =
                 MultiCameraClient(
-                    context,
+                    ReceiverFlagContext(context),
                     object : IDeviceConnectCallBack {
                         override fun onAttachDev(device: UsbDevice?) {
                             device ?: return
