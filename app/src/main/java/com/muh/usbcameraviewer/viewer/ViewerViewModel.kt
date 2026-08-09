@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Instant
 import javax.inject.Inject
 
@@ -37,9 +38,6 @@ private const val RECORDING_TICK_MS = 1_000L
 private const val RESOLUTION_VERIFY_TRIES = 8
 private const val RESOLUTION_VERIFY_STEP_MS = 200L
 private const val MIN_RECORDING_BYTES = 200L * 1024 * 1024
-private const val LOW_STORAGE_MESSAGE = "Not enough storage to record video."
-private const val CAMERA_PERMISSION_DENIED_MESSAGE =
-    "Camera permission is required to view the USB camera."
 
 // ViewerViewModel exposes one cohesive viewer API (open/close, lifecycle, capture, rotate/mirror,
 // resolution); the lifecycle-across-navigation and low-storage additions push it just past the
@@ -58,7 +56,7 @@ class ViewerViewModel
         private val _state = MutableStateFlow<CameraUiState>(CameraUiState.NoDevice)
         val state: StateFlow<CameraUiState> = _state.asStateFlow()
 
-        private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        private val _messages = MutableSharedFlow<ViewerMessage>(extraBufferCapacity = 4)
         val messages = _messages.asSharedFlow()
 
         /** Emitted when a photo is captured, so the UI can flash + buzz (esp. the hardware button). */
@@ -112,16 +110,45 @@ class ViewerViewModel
                             deviceName = event.deviceName,
                             resolution = event.resolution,
                             availableResolutions = event.availableResolutions,
+                            brightnessPercent = controller.getBrightness(),
+                            contrastPercent = controller.getContrast(),
                         )
                 is CameraEvent.OpenFailed ->
                     _state.value =
                         CameraUiState.Error(CameraError.OpenFailed(event.reason))
-                CameraEvent.Detached -> {
-                    val wasRecording = (_state.value as? CameraUiState.Streaming)?.isRecording == true
-                    if (wasRecording) stopRecording()
-                    _state.value = CameraUiState.NoDevice
-                }
+                // A recording interrupted by detach/teardown arrives as RecordingFinalized
+                // (from the controller) before this event; no stop call needed here.
+                CameraEvent.Detached -> _state.value = CameraUiState.NoDevice
                 CameraEvent.ShutterPressed -> onShutter()
+                is CameraEvent.RecordingFinalized -> onRecordingFinalized(event.file)
+            }
+        }
+
+        /**
+         * The controller finalized a recording itself (detach or stream teardown mid-record):
+         * publish what was salvaged, or report the loss if nothing usable was written.
+         */
+        private fun onRecordingFinalized(file: File?) {
+            val wasRecording = (_state.value as? CameraUiState.Streaming)?.isRecording == true
+            tickerJob?.cancel()
+            tickerJob = null
+            _state.update { s ->
+                if (s is CameraUiState.Streaming) s.copy(isRecording = false, recordingSeconds = 0) else s
+            }
+            if (!wasRecording) return
+            viewModelScope.launch {
+                if (file == null) {
+                    _messages.tryEmit(ViewerMessage.RecordingFailed(null))
+                    return@launch
+                }
+                runCatching { captureStore.publishVideo(file, file.name) }
+                    .onSuccess { uri ->
+                        _messages.tryEmit(ViewerMessage.RecordingSaved)
+                        _state.update { s ->
+                            if (s is CameraUiState.Streaming) s.copy(lastCaptureUri = uri) else s
+                        }
+                    }
+                    .onFailure { _messages.tryEmit(ViewerMessage.RecordingFailed(it.message)) }
             }
         }
 
@@ -140,7 +167,7 @@ class ViewerViewModel
             if (granted) {
                 controller.requestPermission()
             } else {
-                _messages.tryEmit(CAMERA_PERMISSION_DENIED_MESSAGE)
+                _messages.tryEmit(ViewerMessage.CameraPermissionDenied)
             }
         }
 
@@ -185,8 +212,9 @@ class ViewerViewModel
         }
 
         private fun closeAndDemote() {
+            // controller.close() finalizes any active recording itself and reports it back via
+            // CameraEvent.RecordingFinalized; calling stopRecording() here raced against that.
             val s = _state.value
-            if (s is CameraUiState.Streaming && s.isRecording) stopRecording()
             controller.close()
             if (s is CameraUiState.Streaming) {
                 _state.value = CameraUiState.Connecting(s.deviceName)
@@ -223,9 +251,7 @@ class ViewerViewModel
                         tries++
                     }
                     if (!live) {
-                        _messages.tryEmit(
-                            "${resolution.width}×${resolution.height} isn't supported by this camera",
-                        )
+                        _messages.tryEmit(ViewerMessage.ResolutionUnsupported(resolution))
                         controller.setResolution(previous)
                         settingsRepository.setLastResolution(previous)
                     }
@@ -240,6 +266,18 @@ class ViewerViewModel
             val degrees = (s.rotationDegrees + ROTATION_STEP_DEGREES) % FULL_ROTATION_DEGREES
             controller.setRotation(degrees)
             _state.value = s.copy(rotationDegrees = degrees)
+        }
+
+        fun onBrightness(percent: Int) {
+            val s = _state.value as? CameraUiState.Streaming ?: return
+            controller.setBrightness(percent)
+            _state.value = s.copy(brightnessPercent = percent)
+        }
+
+        fun onContrast(percent: Int) {
+            val s = _state.value as? CameraUiState.Streaming ?: return
+            controller.setContrast(percent)
+            _state.value = s.copy(contrastPercent = percent)
         }
 
         fun onToggleMirror() {
@@ -277,13 +315,13 @@ class ViewerViewModel
                             if (s is CameraUiState.Streaming) s.copy(lastCaptureUri = uri) else s
                         }
                     }
-                    .onFailure { _messages.tryEmit("Photo failed: ${it.message}") }
+                    .onFailure { _messages.tryEmit(ViewerMessage.PhotoFailed(it.message)) }
             }
         }
 
         private fun startRecording() {
             if (storageChecker.availableBytes() < MIN_RECORDING_BYTES) {
-                _messages.tryEmit(LOW_STORAGE_MESSAGE)
+                _messages.tryEmit(ViewerMessage.LowStorage)
                 return
             }
             viewModelScope.launch {
@@ -311,7 +349,7 @@ class ViewerViewModel
                                 }
                             }
                         }
-                }.onFailure { _messages.tryEmit("Recording failed: ${it.message}") }
+                }.onFailure { _messages.tryEmit(ViewerMessage.RecordingFailed(it.message)) }
             }
         }
 
@@ -331,7 +369,7 @@ class ViewerViewModel
                         }
                     }
                     .onFailure {
-                        _messages.tryEmit("Recording failed: ${it.message}")
+                        _messages.tryEmit(ViewerMessage.RecordingFailed(it.message))
                         _state.update { s ->
                             if (s is CameraUiState.Streaming) s.copy(isRecording = false, recordingSeconds = 0) else s
                         }

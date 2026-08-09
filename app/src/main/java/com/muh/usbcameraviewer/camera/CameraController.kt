@@ -10,6 +10,7 @@ import java.io.File
  * `preview` is Any to keep this interface (and unit tests) free of Android
  * View types; the real implementation requires an AspectRatioTextureView.
  */
+@Suppress("TooManyFunctions") // one cohesive facade over the whole camera lifecycle + controls
 interface CameraController {
     val events: SharedFlow<CameraEvent>
 
@@ -37,6 +38,17 @@ interface CameraController {
     fun setRotation(degrees: Int)
 
     fun setMirror(mirrored: Boolean)
+
+    /** Set image brightness as a 0–100 percentage. No-op when the stream is not open. */
+    fun setBrightness(percent: Int)
+
+    /** Set image contrast as a 0–100 percentage. No-op when the stream is not open. */
+    fun setContrast(percent: Int)
+
+    /** Current brightness/contrast as 0–100 percentages, or null when unavailable. */
+    fun getBrightness(): Int?
+
+    fun getContrast(): Int?
 
     /** Capture a JPEG into [target]. */
     suspend fun capturePhoto(target: File): Result<File>

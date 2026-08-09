@@ -24,12 +24,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * enabled, is captured on its own thread. The muxer starts only once every expected track has its
  * format, and all writes to it are synchronized (MediaMuxer is not thread-safe).
  */
+@Suppress("LongParameterList") // pure configuration constructor; grouping would add noise
 class FrameVideoRecorder(
     private val outputFile: File,
     private val width: Int,
     private val height: Int,
     private val bitRate: Int,
     private val withAudio: Boolean,
+    private val orientationHintDegrees: Int = 0,
+    private val mirrored: Boolean = false,
     private val frameProvider: () -> Bitmap?,
 ) {
     private val running = AtomicBoolean(false)
@@ -37,6 +40,7 @@ class FrameVideoRecorder(
     private lateinit var muxer: MediaMuxer
     private val muxerLock = Any()
     private var muxerStarted = false
+    private var muxerClosed = false
     private var videoTrackIndex = -1
     private var audioTrackIndex = -1
 
@@ -49,6 +53,10 @@ class FrameVideoRecorder(
 
     fun start() {
         muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        // The user's preview rotation: stored as MP4 metadata so players rotate on playback.
+        if (orientationHintDegrees % FULL_TURN != 0) {
+            muxer.setOrientationHint(((orientationHintDegrees % FULL_TURN) + FULL_TURN) % FULL_TURN)
+        }
         videoCodec = createVideoCodec()
         inputSurface = videoCodec.createInputSurface()
         videoCodec.start()
@@ -66,6 +74,9 @@ class FrameVideoRecorder(
             videoThread?.join(THREAD_JOIN_MS)
             audioThread?.join(THREAD_JOIN_MS)
             synchronized(muxerLock) {
+                // Closed BEFORE stop/release: an encoder thread that outlived its join would
+                // otherwise write into (or add a track to) a dead muxer and crash the process.
+                muxerClosed = true
                 if (muxerStarted) runCatching { muxer.stop() }
                 runCatching { muxer.release() }
             }
@@ -92,7 +103,14 @@ class FrameVideoRecorder(
         return codec
     }
 
-    private fun videoLoop() {
+    // The codec dies with an IllegalStateException if stop() released it while this thread was
+    // still draining (join timeout); swallow instead of crashing the process.
+    private fun videoLoop() =
+        runCatching { videoLoopInner() }
+            .onFailure { Log.w(TAG, "video loop ended", it) }
+            .let { }
+
+    private fun videoLoopInner() {
         val info = MediaCodec.BufferInfo()
         val frameIntervalMs = MILLIS_PER_SEC / FRAME_RATE
         while (running.get()) {
@@ -114,7 +132,13 @@ class FrameVideoRecorder(
     private fun drawFrame(bitmap: Bitmap) {
         val canvas = inputSurface.lockCanvas(null) ?: return
         try {
+            if (mirrored) {
+                // Bake the display-only mirror into the encoded frames.
+                canvas.save()
+                canvas.scale(-1f, 1f, width / 2f, height / 2f)
+            }
             canvas.drawBitmap(bitmap, Rect(0, 0, bitmap.width, bitmap.height), dstRect, null)
+            if (mirrored) canvas.restore()
         } finally {
             inputSurface.unlockCanvasAndPost(canvas)
         }
@@ -124,15 +148,20 @@ class FrameVideoRecorder(
         info: MediaCodec.BufferInfo,
         endOfStream: Boolean,
     ) {
+        // A codec that never delivers EOS (device quirk) must not spin this loop forever —
+        // stop() would time out its join and the file would still finalize with what we have.
+        var emptyPolls = 0
         while (true) {
             val outIndex = videoCodec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
             when {
                 outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED ->
                     synchronized(muxerLock) {
-                        videoTrackIndex = muxer.addTrack(videoCodec.outputFormat)
-                        maybeStartMuxer()
+                        if (!muxerClosed) {
+                            videoTrackIndex = muxer.addTrack(videoCodec.outputFormat)
+                            maybeStartMuxer()
+                        }
                     }
-                outIndex < 0 -> if (!endOfStream) return
+                outIndex < 0 -> if (!endOfStream || ++emptyPolls >= MAX_EOS_EMPTY_POLLS) return
                 else -> {
                     val encoded = videoCodec.getOutputBuffer(outIndex)!!
                     if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
@@ -144,8 +173,15 @@ class FrameVideoRecorder(
         }
     }
 
+    // Same crash shield as videoLoop: released codec/record after a join timeout must not
+    // take down the process.
+    private fun audioLoop() =
+        runCatching { audioLoopInner() }
+            .onFailure { Log.w(TAG, "audio loop ended", it) }
+            .let { }
+
     @Suppress("LongMethod") // one linear encode loop reads clearer than split across helpers
-    private fun audioLoop() {
+    private fun audioLoopInner() {
         val minBuf =
             AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val bufSize = maxOf(minBuf, AUDIO_READ_BYTES)
@@ -221,8 +257,10 @@ class FrameVideoRecorder(
             when {
                 outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED ->
                     synchronized(muxerLock) {
-                        audioTrackIndex = muxer.addTrack(audioCodec.outputFormat)
-                        maybeStartMuxer()
+                        if (!muxerClosed) {
+                            audioTrackIndex = muxer.addTrack(audioCodec.outputFormat)
+                            maybeStartMuxer()
+                        }
                     }
                 outIndex < 0 -> return
                 else -> {
@@ -262,7 +300,7 @@ class FrameVideoRecorder(
     ) {
         if (track < 0) return
         synchronized(muxerLock) {
-            if (!muxerStarted) return
+            if (!muxerStarted || muxerClosed) return
             buffer.position(info.offset)
             buffer.limit(info.offset + info.size)
             muxer.writeSampleData(track, buffer, info)
@@ -276,6 +314,8 @@ class FrameVideoRecorder(
         const val DEQUEUE_TIMEOUT_US = 10_000L
         const val END_OF_STREAM_TIMEOUT_US = 100_000L
         const val THREAD_JOIN_MS = 3_000L
+        const val MAX_EOS_EMPTY_POLLS = 50
+        const val FULL_TURN = 360
         const val MICROS_DIVISOR = 1_000L
         const val MILLIS_PER_SEC = 1_000L
         const val DISABLED_TRACK = -2

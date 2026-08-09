@@ -44,8 +44,18 @@ class FakeCameraController : CameraController {
         openCalls += preview to preferred
     }
 
+    private var finalizedRecordings = 0
+
     override fun close() {
         closed = true
+        // Mirror the real controller's contract: tearing down mid-record finalizes the
+        // recording and reports it back as a RecordingFinalized event.
+        if (recordingStarts.size > stopRecordingCalls + finalizedRecordings) {
+            finalizedRecordings++
+            _events.tryEmit(
+                CameraEvent.RecordingFinalized(recordingStarts.last().first.apply { writeText("mp4") }),
+            )
+        }
     }
 
     override suspend fun setResolution(resolution: Resolution) {
@@ -59,6 +69,25 @@ class FakeCameraController : CameraController {
     override fun setMirror(mirrored: Boolean) {
         mirrorCalls += mirrored
     }
+
+    val brightnessCalls = mutableListOf<Int>()
+    val contrastCalls = mutableListOf<Int>()
+    var fakeBrightness: Int? = null
+    var fakeContrast: Int? = null
+
+    override fun setBrightness(percent: Int) {
+        brightnessCalls += percent
+        fakeBrightness = percent
+    }
+
+    override fun setContrast(percent: Int) {
+        contrastCalls += percent
+        fakeContrast = percent
+    }
+
+    override fun getBrightness(): Int? = fakeBrightness
+
+    override fun getContrast(): Int? = fakeContrast
 
     override suspend fun capturePhoto(target: File): Result<File> = photoResult(target)
 

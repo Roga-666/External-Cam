@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -23,7 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Flip
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Rotate90DegreesCw
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AssistChip
@@ -42,6 +46,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -49,20 +54,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -86,6 +98,8 @@ data class ViewerCallbacks(
     val onSelectResolution: (Resolution) -> Unit = {},
     val onRotate: () -> Unit = {},
     val onToggleMirror: () -> Unit = {},
+    val onBrightness: (Int) -> Unit = {},
+    val onContrast: (Int) -> Unit = {},
     val onShutter: () -> Unit = {},
     val onToggleCaptureMode: () -> Unit = {},
     val onOpenGallery: () -> Unit = {},
@@ -108,7 +122,8 @@ fun ViewerScreen(
     val recordAudioEnabled by viewModel.recordAudioEnabled.collectAsStateWithLifecycle()
     val switchingResolution by viewModel.switchingResolution.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it.resolve(context)) } }
 
     // Capture feedback: a brief white flash + haptic buzz, so a photo (especially one taken with
     // the hardware button) is clearly acknowledged.
@@ -124,7 +139,6 @@ fun ViewerScreen(
 
     // Android gates USB Video Class access behind the CAMERA runtime permission.
     // Request it up front so a device attach can complete its USB-permission grant.
-    val context = LocalContext.current
     val cameraPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             viewModel.onCameraPermissionResult(granted)
@@ -169,6 +183,8 @@ fun ViewerScreen(
                     onSelectResolution = viewModel::onSelectResolution,
                     onRotate = viewModel::onRotate,
                     onToggleMirror = viewModel::onToggleMirror,
+                    onBrightness = viewModel::onBrightness,
+                    onContrast = viewModel::onContrast,
                     onShutter = viewModel::onShutter,
                     onToggleCaptureMode = viewModel::onToggleCaptureMode,
                     onOpenGallery = onOpenGallery,
@@ -201,6 +217,21 @@ fun ViewerScreen(
 
 private const val FLASH_PEAK_ALPHA = 0.75f
 private const val FLASH_FADE_MS = 320
+private const val MAX_ZOOM = 5f
+
+/** Resolve a one-shot ViewModel message to its localized text. */
+private fun ViewerMessage.resolve(context: android.content.Context): String =
+    when (this) {
+        ViewerMessage.LowStorage -> context.getString(R.string.msg_low_storage)
+        ViewerMessage.CameraPermissionDenied -> context.getString(R.string.msg_camera_permission)
+        is ViewerMessage.PhotoFailed ->
+            context.getString(R.string.msg_photo_failed, reason ?: context.getString(R.string.unknown_error))
+        is ViewerMessage.RecordingFailed ->
+            context.getString(R.string.error_recording_failed, reason ?: context.getString(R.string.unknown_error))
+        ViewerMessage.RecordingSaved -> context.getString(R.string.msg_recording_saved)
+        is ViewerMessage.ResolutionUnsupported ->
+            context.getString(R.string.msg_resolution_unsupported, resolution.toString())
+    }
 
 @Composable
 fun ViewerContent(
@@ -219,12 +250,20 @@ fun ViewerContent(
         // stable surface size — resizing it on a resolution change blanks the native stream); the
         // controller letterboxes the picture with a TextureView transform instead.
         if (state is CameraUiState.Connecting || state is CameraUiState.Streaming) {
-            PreviewSurface(callbacks)
+            ZoomablePreview(streaming = state is CameraUiState.Streaming, callbacks = callbacks)
         }
         when (state) {
             CameraUiState.NoDevice ->
                 CenteredMessage(
-                    icon = { Icon(Icons.Filled.Usb, contentDescription = null, Modifier.size(64.dp)) },
+                    icon = {
+                        Icon(
+                            Icons.Filled.Usb,
+                            contentDescription = null,
+                            Modifier.size(64.dp),
+                            // Explicit: default LocalContentColor rendered black-on-black here.
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    },
                     title = stringResource(R.string.no_device_title),
                     body = stringResource(R.string.no_device_body),
                 )
@@ -279,7 +318,6 @@ private fun CameraError.message(): String =
         CameraError.NoUsbHostSupport -> stringResource(R.string.error_no_usb_host)
         CameraError.PermissionDenied -> stringResource(R.string.permission_needed_title)
         is CameraError.OpenFailed -> stringResource(R.string.error_open_failed)
-        CameraError.UnsupportedDevice -> stringResource(R.string.error_unsupported_device)
         is CameraError.RecordingFailed -> stringResource(R.string.error_recording_failed, reason)
     }
 
@@ -309,6 +347,54 @@ private fun CenteredMessage(
             )
         }
         Box(Modifier.padding(top = 24.dp)) { action() }
+    }
+}
+
+/** Pinch-zoom + pan around the preview, display-only (captures unaffected); resets on stream end. */
+@Composable
+private fun ZoomablePreview(
+    streaming: Boolean,
+    callbacks: ViewerCallbacks,
+) {
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(streaming) {
+        if (!streaming) {
+            zoom = 1f
+            offset = Offset.Zero
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clipToBounds()
+            .onSizeChanged { containerSize = it }
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, gestureZoom, _ ->
+                    zoom = (zoom * gestureZoom).coerceIn(1f, MAX_ZOOM)
+                    val maxX = (zoom - 1f) * containerSize.width / 2f
+                    val maxY = (zoom - 1f) * containerSize.height / 2f
+                    offset =
+                        Offset(
+                            (offset.x * gestureZoom + pan.x).coerceIn(-maxX, maxX),
+                            (offset.y * gestureZoom + pan.y).coerceIn(-maxY, maxY),
+                        )
+                }
+            },
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = zoom
+                    scaleY = zoom
+                    translationX = offset.x
+                    translationY = offset.y
+                },
+        ) {
+            PreviewSurface(callbacks)
+        }
     }
 }
 
@@ -378,6 +464,7 @@ private fun StreamingContent(
             proceedAfterStorage()
         }
     }
+    var adjustPanel by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -417,6 +504,13 @@ private fun StreamingContent(
                     }
                 }
                 Row {
+                    IconButton(onClick = { adjustPanel = !adjustPanel }) {
+                        Icon(
+                            Icons.Filled.Tune,
+                            contentDescription = stringResource(R.string.cd_adjust_image),
+                            tint = if (adjustPanel) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
                     IconButton(onClick = callbacks.onRotate) {
                         Icon(
                             Icons.Filled.Rotate90DegreesCw,
@@ -495,6 +589,39 @@ private fun StreamingContent(
             }
         }
 
+        if (adjustPanel) {
+            Column(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(top = 56.dp, end = 8.dp)
+                    .width(260.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.brightness),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Slider(
+                    value = (state.brightnessPercent ?: DEFAULT_CONTROL_PERCENT).toFloat(),
+                    onValueChange = { callbacks.onBrightness(it.toInt()) },
+                    valueRange = 0f..100f,
+                )
+                Text(
+                    stringResource(R.string.contrast),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Slider(
+                    value = (state.contrastPercent ?: DEFAULT_CONTROL_PERCENT).toFloat(),
+                    onValueChange = { callbacks.onContrast(it.toInt()) },
+                    valueRange = 0f..100f,
+                )
+            }
+        }
+
         if (state.isRecording) {
             AssistChip(
                 onClick = {},
@@ -513,6 +640,7 @@ private fun StreamingContent(
 }
 
 private const val SECONDS_PER_MINUTE = 60
+private const val DEFAULT_CONTROL_PERCENT = 50
 
 internal fun formatElapsed(seconds: Long): String =
     "%02d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)

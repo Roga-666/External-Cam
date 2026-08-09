@@ -50,7 +50,9 @@ class MediaStoreMediaRepository
                 )
             val (selection, args) =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?" to arrayOf("%$ALBUM%")
+                    // Anchored to a path segment: a plain %ALBUM% would also match any other
+                    // app's album whose name merely contains ours.
+                    "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?" to arrayOf("%/$ALBUM/%")
                 } else {
                     @Suppress("DEPRECATION")
                     "${MediaStore.MediaColumns.DATA} LIKE ?" to arrayOf("%/$ALBUM/%")

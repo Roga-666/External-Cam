@@ -126,7 +126,7 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Attached("Endoscope"))
             vm.messages.test {
                 vm.onCameraPermissionResult(granted = false)
-                assertTrue(awaitItem().isNotBlank())
+                assertEquals(ViewerMessage.CameraPermissionDenied, awaitItem())
             }
             assertEquals(0, fake.permissionRequests)
         }
@@ -184,7 +184,7 @@ class ViewerViewModelTest {
             fake.previewLive = false // the new mode delivers only black frames
             vm.messages.test {
                 vm.onSelectResolution(res1080)
-                assertTrue(awaitItem().contains("supported"))
+                assertEquals(ViewerMessage.ResolutionUnsupported(res1080), awaitItem())
             }
             // Switched to the requested size, then reverted to the previous one.
             assertEquals(listOf(res1080, res720), fake.resolutionCalls)
@@ -266,7 +266,7 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
             vm.messages.test {
                 vm.onShutter()
-                assertTrue(awaitItem().isNotBlank())
+                assertTrue(awaitItem() is ViewerMessage.PhotoFailed)
             }
             assertTrue(vm.state.value is CameraUiState.Streaming)
             assertNull((vm.state.value as CameraUiState.Streaming).lastCaptureUri)
@@ -282,11 +282,12 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
             vm.onToggleCaptureMode()
             vm.onShutter() // start recording
+            // The controller finalizes the recording itself on detach and reports the salvaged
+            // file before the Detached event; the ViewModel publishes it.
+            val partial = File(tmp.root, "partial.mp4").apply { writeText("mp4") }
+            fake.emit(CameraEvent.RecordingFinalized(partial))
             fake.emit(CameraEvent.Detached)
             assertEquals(CameraUiState.NoDevice, vm.state.value)
-            // stopRecording was actually invoked (not just that state flipped), and the partial
-            // file was finalized+published.
-            assertEquals(1, fake.stopRecordingCalls)
             assertTrue(captureStore.published.any { it.endsWith(".mp4") })
         }
 
@@ -317,7 +318,7 @@ class ViewerViewModelTest {
             vm.onToggleCaptureMode()
             vm.messages.test {
                 vm.onShutter()
-                assertTrue(awaitItem().isNotBlank())
+                assertEquals(ViewerMessage.LowStorage, awaitItem())
             }
             assertFalse((vm.state.value as CameraUiState.Streaming).isRecording)
             assertTrue(fake.recordingStarts.isEmpty())
@@ -345,10 +346,27 @@ class ViewerViewModelTest {
             fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
             vm.onToggleCaptureMode()
             vm.onShutter() // start recording
+            // close() (via onPreviewDisposed) finalizes the recording and emits
+            // RecordingFinalized — the fake mirrors the real controller's contract.
             vm.onPreviewDisposed()
-            assertEquals(1, fake.stopRecordingCalls)
             assertTrue(captureStore.published.any { it.endsWith(".mp4") })
             assertEquals(CameraUiState.Connecting("Endoscope"), vm.state.value)
+        }
+
+    @Test
+    fun `brightness and contrast forward to controller and update state`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            vm.onBrightness(70)
+            vm.onContrast(30)
+            assertEquals(listOf(70), fake.brightnessCalls)
+            assertEquals(listOf(30), fake.contrastCalls)
+            val s = vm.state.value as CameraUiState.Streaming
+            assertEquals(70, s.brightnessPercent)
+            assertEquals(30, s.contrastPercent)
         }
 
     @Test

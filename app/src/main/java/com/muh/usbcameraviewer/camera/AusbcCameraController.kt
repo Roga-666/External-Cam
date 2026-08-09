@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Matrix
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.os.Build
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.callback.ICameraStateCallBack
@@ -51,6 +53,90 @@ internal class ReceiverFlagContext(base: Context) : ContextWrapper(base) {
 }
 
 /**
+ * USBMonitor fires onDisconnect whenever ANY UsbControlBlock is closed — including the clone
+ * closed by the library's own closeCamera() while the device stays plugged in. A disconnect is a
+ * real detach only when the device we are using is no longer present on the USB bus.
+ */
+internal fun shouldTreatDisconnectAsDetach(
+    pendingDeviceName: String?,
+    attachedDeviceNames: Collection<String>,
+): Boolean = pendingDeviceName == null || pendingDeviceName !in attachedDeviceNames
+
+private const val BLACK_LUMINANCE = 12
+private const val RED_SHIFT = 16
+private const val GREEN_SHIFT = 8
+private const val COLOR_MASK = 0xFF
+
+internal fun luminanceOf(pixel: Int): Int =
+    maxOf(
+        (pixel shr RED_SHIFT) and COLOR_MASK,
+        (pixel shr GREEN_SHIFT) and COLOR_MASK,
+        pixel and COLOR_MASK,
+    )
+
+/**
+ * A stream is live when any sampled pixel is bright (endoscope LEDs light every real frame) OR
+ * the sample grid changed between two probes — sensor noise makes consecutive frames differ even
+ * in the dark, while a dead stream repeats one identical frame. Brightness alone falsely reverted
+ * resolution switches in dark scenes.
+ */
+internal fun samplesIndicateLive(
+    previous: IntArray?,
+    current: IntArray,
+): Boolean =
+    current.any { it > BLACK_LUMINANCE } ||
+        (previous != null && !previous.contentEquals(current))
+
+/**
+ * Bake the display-only rotate/mirror View transforms into a captured bitmap so the saved file
+ * matches what the user sees. Mirror is applied before rotation, matching how the preview stacks
+ * scaleX on top of the rotated view. Recycles [bitmap] when a new one is produced.
+ */
+internal fun bakeOrientation(
+    bitmap: Bitmap,
+    rotationDegrees: Int,
+    mirrored: Boolean,
+): Bitmap {
+    val degrees = ((rotationDegrees % FULL_TURN_DEGREES) + FULL_TURN_DEGREES) % FULL_TURN_DEGREES
+    if (degrees == 0 && !mirrored) return bitmap
+    val quarterTurned = degrees % HALF_TURN_DEGREES != 0
+    val outW = if (quarterTurned) bitmap.height else bitmap.width
+    val outH = if (quarterTurned) bitmap.width else bitmap.height
+    val baked = Bitmap.createBitmap(outW, outH, bitmap.config ?: Bitmap.Config.ARGB_8888)
+    Canvas(baked).apply {
+        concat(orientationMatrix(bitmap.width, bitmap.height, degrees, mirrored))
+        drawBitmap(bitmap, 0f, 0f, null)
+    }
+    bitmap.recycle()
+    return baked
+}
+
+/**
+ * Maps source-bitmap coordinates to the baked output: mirror first (as the preview stacks
+ * scaleX on the rotated view), then rotate, then shift into the (possibly dimension-swapped)
+ * output rect. Pure math, unit-tested separately from the raster step.
+ */
+internal fun orientationMatrix(
+    width: Int,
+    height: Int,
+    degrees: Int,
+    mirrored: Boolean,
+): Matrix =
+    Matrix().apply {
+        val cx = width / 2f
+        val cy = height / 2f
+        if (mirrored) postScale(-1f, 1f, cx, cy)
+        if (degrees != 0) postRotate(degrees.toFloat(), cx, cy)
+        if (degrees % HALF_TURN_DEGREES != 0) {
+            postTranslate((height - width) / 2f, (width - height) / 2f)
+        }
+    }
+
+private const val HALF_TURN_DEGREES = 180
+
+private const val FULL_TURN_DEGREES = 360
+
+/**
  * The only class that talks to AUSBC (`com.jiangdg.*` / `com.serenegiant.*`).
  *
  * Targets AndroidUSBCamera **3.2.7** — the newest release whose full module set
@@ -79,6 +165,16 @@ class AusbcCameraController
         // 3.2.7 exposes no render rotation/mirror on the camera, so rotate/mirror are
         // applied as View transforms on the preview surface (see setRotation/setMirror).
         private var previewView: AspectRatioTextureView? = null
+        private var layoutListener: android.view.View.OnLayoutChangeListener? = null
+
+        // Retained so captures can bake the orientation the user sees into the saved file
+        // (the View transforms above are display-only and invisible to getBitmap()).
+        @Volatile private var rotationDegrees: Int = 0
+
+        @Volatile private var mirrored: Boolean = false
+
+        /** Grid luminances of the previous liveness probe, for frame-change detection. */
+        private var lastLivenessSamples: IntArray? = null
 
         // AUSBC 3.2.7's captureImage/captureVideoStart write to a file only after passing
         // CameraUtils.hasStoragePermission() — WRITE_EXTERNAL_STORAGE, which cannot be granted
@@ -92,12 +188,21 @@ class AusbcCameraController
 
         private fun UsbDevice.displayName(): String = productName?.takeIf { it.isNotBlank() } ?: "USB Camera"
 
-        /** Grab the frame currently rendered on the preview surface, on the main thread. */
-        private suspend fun grabBitmap(): Bitmap? =
+        private fun attachedUsbDeviceNames(): Set<String> =
+            (context.getSystemService(Context.USB_SERVICE) as? UsbManager)?.deviceList?.keys ?: emptySet()
+
+        /**
+         * Grab the frame currently rendered on the preview surface at the given size, on the
+         * main thread. Requesting the stream size (not the view size) avoids a blurry upscale.
+         */
+        private suspend fun grabBitmap(
+            width: Int,
+            height: Int,
+        ): Bitmap? =
             withContext(Dispatchers.Main.immediate) {
                 val view = previewView ?: return@withContext null
-                if (!view.isAvailable) return@withContext null
-                view.bitmap
+                if (!view.isAvailable || width <= 0 || height <= 0) return@withContext null
+                view.getBitmap(width, height)
             }
 
         override fun startMonitoring() {
@@ -142,6 +247,15 @@ class AusbcCameraController
                             device: UsbDevice?,
                             ctrlBlock: USBMonitor.UsbControlBlock?,
                         ) {
+                            // USBMonitor fires onDisconnect for EVERY UsbControlBlock close —
+                            // including the clone the library closes inside closeCamera() while the
+                            // device is still plugged in (navigating to settings/gallery). Treating
+                            // that as an unplug dropped the control block and stranded the UI on
+                            // "plug in your camera". Only a device actually gone from the USB bus is
+                            // a real detach; otherwise keep the block so the next open() reconnects.
+                            if (!shouldTreatDisconnectAsDetach(pendingDevice?.deviceName, attachedUsbDeviceNames())) {
+                                return
+                            }
                             teardownCamera()
                             // Device disconnected: drop the stale control block.
                             this@AusbcCameraController.ctrlBlock = null
@@ -200,12 +314,17 @@ class AusbcCameraController
             }
             previewView = view
             // Re-letterbox whenever the view resizes (e.g. the screen rotates) — the transform is
-            // computed from the view dimensions, which change on rotation.
-            view.addOnLayoutChangeListener { _, left, top, right, bottom, oldL, oldT, oldR, oldB ->
-                if (right - left != oldR - oldL || bottom - top != oldB - oldT) {
-                    applyPreviewTransform(currentSize)
+            // computed from the view dimensions, which change on rotation. Single listener: a
+            // re-open on the same retained view must not stack another copy.
+            layoutListener?.let(view::removeOnLayoutChangeListener)
+            val listener =
+                android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, oldL, oldT, oldR, oldB ->
+                    if (right - left != oldR - oldL || bottom - top != oldB - oldT) {
+                        applyPreviewTransform(currentSize)
+                    }
                 }
-            }
+            layoutListener = listener
+            view.addOnLayoutChangeListener(listener)
             // 3.2.7: instantiate MultiCameraClient.Camera directly (no CameraUVC class).
             val cam = MultiCameraClient.Camera(context, device)
             cam.setUsbControlBlock(block)
@@ -260,11 +379,22 @@ class AusbcCameraController
         override fun close() = teardownCamera()
 
         private fun teardownCamera() {
-            runCatching { videoRecorder?.stop() }
+            val recorder = videoRecorder
             videoRecorder = null
+            if (recorder != null) {
+                // Torn down mid-record (detach, navigation): finalize and surface what was
+                // captured so far instead of silently discarding it.
+                val file = runCatching { recorder.stop() }.getOrNull()
+                _events.tryEmit(
+                    CameraEvent.RecordingFinalized(file?.takeIf { it.exists() && it.length() > 0 }),
+                )
+            }
             runCatching { camera?.closeCamera() }
             camera = null
+            layoutListener?.let { previewView?.removeOnLayoutChangeListener(it) }
+            layoutListener = null
             previewView = null
+            lastLivenessSamples = null
         }
 
         override suspend fun setResolution(resolution: Resolution): Unit =
@@ -330,24 +460,19 @@ class AusbcCameraController
         }
 
         override suspend fun isPreviewLive(): Boolean {
-            val bitmap = grabBitmap() ?: return false
-            // Sample a coarse grid; any bright pixel means frames are flowing (endoscope LED is on).
-            val last = LIVENESS_SAMPLES - 1
-            return (0..last).any { r ->
-                (0..last).any { c ->
-                    val x = (bitmap.width - 1) * c / last
-                    val y = (bitmap.height - 1) * r / last
-                    luminanceOf(bitmap.getPixel(x, y)) > BLACK_LUMINANCE
+            // A tiny scaled grab is enough for the luminance grid and far cheaper than a full frame.
+            val bitmap = grabBitmap(LIVENESS_SAMPLES, LIVENESS_SAMPLES) ?: return false
+            val samples = IntArray(LIVENESS_SAMPLES * LIVENESS_SAMPLES)
+            for (y in 0 until LIVENESS_SAMPLES) {
+                for (x in 0 until LIVENESS_SAMPLES) {
+                    samples[y * LIVENESS_SAMPLES + x] = luminanceOf(bitmap.getPixel(x, y))
                 }
             }
+            bitmap.recycle()
+            val previous = lastLivenessSamples
+            lastLivenessSamples = samples
+            return samplesIndicateLive(previous, samples)
         }
-
-        private fun luminanceOf(pixel: Int): Int =
-            maxOf(
-                (pixel shr RED_SHIFT) and COLOR_MASK,
-                (pixel shr GREEN_SHIFT) and COLOR_MASK,
-                pixel and COLOR_MASK,
-            )
 
         /** The UVCCamera is private to MultiCameraClient.Camera; reach it reflectively once open. */
         private fun uvcCameraOf(cam: MultiCameraClient.Camera): UVCCamera? =
@@ -383,23 +508,51 @@ class AusbcCameraController
 
         override fun setRotation(degrees: Int) {
             // 3.2.7 has no render-side rotation; rotate the preview surface itself.
+            rotationDegrees = degrees
             previewView?.rotation = degrees.toFloat()
         }
 
         override fun setMirror(mirrored: Boolean) {
             // 3.2.7 has no render-side flip; mirror the preview surface horizontally.
+            this.mirrored = mirrored
             previewView?.scaleX = if (mirrored) -1f else 1f
         }
 
+        override fun setBrightness(percent: Int) {
+            val uvc = camera?.let(::uvcCameraOf) ?: return
+            runCatching { uvc.setBrightness(percent.coerceIn(0, PERCENT_MAX)) }
+        }
+
+        override fun setContrast(percent: Int) {
+            val uvc = camera?.let(::uvcCameraOf) ?: return
+            runCatching { uvc.setContrast(percent.coerceIn(0, PERCENT_MAX)) }
+        }
+
+        override fun getBrightness(): Int? {
+            val uvc = camera?.let(::uvcCameraOf) ?: return null
+            return runCatching { uvc.brightness }.getOrNull()
+        }
+
+        override fun getContrast(): Int? {
+            val uvc = camera?.let(::uvcCameraOf) ?: return null
+            return runCatching { uvc.contrast }.getOrNull()
+        }
+
         override suspend fun capturePhoto(target: File): Result<File> {
-            val bitmap =
-                grabBitmap()
+            val size = currentSize
+            val raw =
+                grabBitmap(size.width, size.height)
                     ?: return Result.failure(IllegalStateException("no preview frame yet"))
             return withContext(Dispatchers.IO) {
                 runCatching {
-                    FileOutputStream(target).use { out ->
-                        val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-                        check(ok) { "JPEG compression failed" }
+                    val bitmap = bakeOrientation(raw, rotationDegrees, mirrored)
+                    try {
+                        FileOutputStream(target).use { out ->
+                            val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                            check(ok) { "JPEG compression failed" }
+                        }
+                    } finally {
+                        bitmap.recycle()
                     }
                     target
                 }
@@ -424,6 +577,10 @@ class AusbcCameraController
                             height = h,
                             bitRate = if (bitRate > 0) bitRate else DEFAULT_BIT_RATE,
                             withAudio = withAudio,
+                            // Rotation rides as a muxer orientation hint (players rotate on
+                            // playback); mirror is baked per-frame. Fixed at record start.
+                            orientationHintDegrees = rotationDegrees,
+                            mirrored = mirrored,
                             frameProvider = { view.takeIf { it.isAvailable }?.getBitmap(w, h) },
                         )
                     recorder.start()
@@ -454,9 +611,6 @@ class AusbcCameraController
             const val DEFAULT_BIT_RATE = 6_000_000
             const val PREVIEW_BANDWIDTH = 1.0f
             const val LIVENESS_SAMPLES = 8
-            const val BLACK_LUMINANCE = 12
-            const val RED_SHIFT = 16
-            const val GREEN_SHIFT = 8
-            const val COLOR_MASK = 0xFF
+            const val PERCENT_MAX = 100
         }
     }

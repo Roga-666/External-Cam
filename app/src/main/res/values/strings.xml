@@ -8,8 +8,16 @@
     <string name="connecting_to">Connecting to %1$s…</string>
     <string name="error_open_failed">Could not open the camera.</string>
     <string name="error_no_usb_host">This phone does not support USB OTG host mode.</string>
-    <string name="error_unsupported_device">This USB device is not a supported UVC camera.</string>
     <string name="error_recording_failed">Recording failed: %1$s</string>
+    <string name="msg_low_storage">Not enough storage to record video.</string>
+    <string name="msg_camera_permission">Camera permission is required to view the USB camera.</string>
+    <string name="msg_photo_failed">Photo failed: %1$s</string>
+    <string name="msg_recording_saved">Recording saved.</string>
+    <string name="msg_resolution_unsupported">%1$s isn\'t supported by this camera</string>
+    <string name="unknown_error">unknown error</string>
+    <string name="brightness">Brightness</string>
+    <string name="contrast">Contrast</string>
+    <string name="cd_adjust_image">Adjust brightness and contrast</string>
     <string name="retry">Retry</string>
     <string name="cd_shutter">Take photo</string>
     <string name="cd_record_start">Start recording</string>

@@ -1,5 +1,7 @@
 package com.muh.usbcameraviewer.camera
 
+import java.io.File
+
 data class Resolution(val width: Int, val height: Int) {
     override fun toString(): String = "${width}x$height"
 }
@@ -12,8 +14,6 @@ sealed interface CameraError {
     data object PermissionDenied : CameraError
 
     data class OpenFailed(val reason: String) : CameraError
-
-    data object UnsupportedDevice : CameraError
 
     data class RecordingFailed(val reason: String) : CameraError
 }
@@ -40,6 +40,8 @@ sealed interface CameraUiState {
         val rotationDegrees: Int = 0,
         val mirrored: Boolean = false,
         val captureMode: CaptureMode = CaptureMode.PHOTO,
+        val brightnessPercent: Int? = null,
+        val contrastPercent: Int? = null,
         val isRecording: Boolean = false,
         val recordingSeconds: Long = 0,
         val lastCaptureUri: String? = null,
@@ -70,4 +72,11 @@ sealed interface CameraEvent {
 
     /** The physical shutter button on the USB camera was pressed. */
     data object ShutterPressed : CameraEvent
+
+    /**
+     * A recording was finalized by the controller itself (device detached or stream torn down
+     * mid-record) rather than by an explicit stopRecording() call. [file] is the playable MP4
+     * salvaged so far, or null if nothing usable was written.
+     */
+    data class RecordingFinalized(val file: File?) : CameraEvent
 }
