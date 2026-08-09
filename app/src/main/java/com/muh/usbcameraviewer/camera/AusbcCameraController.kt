@@ -134,6 +134,80 @@ internal fun orientationMatrix(
 
 private const val HALF_TURN_DEGREES = 180
 
+/**
+ * Content transform for the preview TextureView: letterbox the (stretched-to-view) stream to its
+ * correct aspect, then mirror, then rotate — all around the view center. Doing rotation inside
+ * this matrix (instead of View.rotation) keeps the letterbox correct for 90°/270°, where the
+ * displayed aspect inverts and a view-level rotation showed a stretched, overflowing picture.
+ */
+@Suppress("LongParameterList") // one value per pipeline input; a param object would add noise
+internal fun previewTransformMatrix(
+    streamW: Int,
+    streamH: Int,
+    viewW: Float,
+    viewH: Float,
+    degrees: Int,
+    mirrored: Boolean,
+): Matrix {
+    val quarterTurned = degrees % HALF_TURN_DEGREES != 0
+    val displayedAspect =
+        if (quarterTurned) streamH.toFloat() / streamW else streamW.toFloat() / streamH
+    val (shownW, shownH) =
+        if (displayedAspect >= viewW / viewH) {
+            viewW to viewW / displayedAspect
+        } else {
+            viewH * displayedAspect to viewH
+        }
+    // Pre-rotation content size: rotation swaps width/height on quarter turns.
+    val preW = if (quarterTurned) shownH else shownW
+    val preH = if (quarterTurned) shownW else shownH
+    val cx = viewW / 2f
+    val cy = viewH / 2f
+    return Matrix().apply {
+        setScale(preW / viewW, preH / viewH, cx, cy)
+        if (mirrored) postScale(-1f, 1f, cx, cy)
+        if (degrees != 0) postRotate(degrees.toFloat(), cx, cy)
+    }
+}
+
+/**
+ * The stream-buffer region currently visible on screen, given the full display pipeline:
+ * buffer stretched to the view, [previewTransformMatrix], then the UI's pinch-zoom/pan
+ * (scale around the view center plus translation). Inverse-maps the view rect into buffer
+ * coordinates and clips to the buffer. Used to crop photo captures to what the user sees.
+ */
+@Suppress("LongParameterList") // one value per pipeline stage; a param object would add noise
+internal fun visibleStreamRect(
+    streamW: Int,
+    streamH: Int,
+    viewW: Float,
+    viewH: Float,
+    degrees: Int,
+    mirrored: Boolean,
+    zoom: Float,
+    offsetX: Float,
+    offsetY: Float,
+): android.graphics.Rect {
+    val cx = viewW / 2f
+    val cy = viewH / 2f
+    val pipeline =
+        Matrix().apply {
+            setScale(viewW / streamW, viewH / streamH)
+            postConcat(previewTransformMatrix(streamW, streamH, viewW, viewH, degrees, mirrored))
+            postScale(zoom, zoom, cx, cy)
+            postTranslate(offsetX, offsetY)
+        }
+    val inverse = Matrix()
+    if (!pipeline.invert(inverse)) return android.graphics.Rect(0, 0, streamW, streamH)
+    val visible = android.graphics.RectF(0f, 0f, viewW, viewH)
+    inverse.mapRect(visible)
+    val left = visible.left.toInt().coerceIn(0, streamW - 1)
+    val top = visible.top.toInt().coerceIn(0, streamH - 1)
+    val right = visible.right.toInt().coerceIn(left + 1, streamW)
+    val bottom = visible.bottom.toInt().coerceIn(top + 1, streamH)
+    return android.graphics.Rect(left, top, right, bottom)
+}
+
 private const val FULL_TURN_DEGREES = 360
 
 /**
@@ -175,6 +249,13 @@ class AusbcCameraController
 
         /** Grid luminances of the previous liveness probe, for frame-change detection. */
         private var lastLivenessSamples: IntArray? = null
+
+        // UI pinch-zoom state, mirrored here so photo captures crop to the visible region.
+        @Volatile private var zoomFactor: Float = 1f
+
+        @Volatile private var zoomOffsetX: Float = 0f
+
+        @Volatile private var zoomOffsetY: Float = 0f
 
         // AUSBC 3.2.7's captureImage/captureVideoStart write to a file only after passing
         // CameraUtils.hasStoragePermission() — WRITE_EXTERNAL_STORAGE, which cannot be granted
@@ -219,6 +300,10 @@ class AusbcCameraController
                     object : IDeviceConnectCallBack {
                         override fun onAttachDev(device: UsbDevice?) {
                             device ?: return
+                            // A second camera attaching while one is pending/active must not
+                            // hijack the session; it becomes usable after the first detaches.
+                            val current = pendingDevice
+                            if (current != null && device.deviceName != current.deviceName) return
                             pendingDevice = device
                             _events.tryEmit(CameraEvent.Attached(device.displayName()))
                             client?.requestPermission(device)
@@ -372,7 +457,42 @@ class AusbcCameraController
                     .setPreviewWidth(preferred?.width ?: DEFAULT_PREVIEW_WIDTH)
                     .setPreviewHeight(preferred?.height ?: DEFAULT_PREVIEW_HEIGHT)
                     .create()
-            cam.openCamera(view, request)
+            // The AndroidView factory hands the view over BEFORE its SurfaceTexture exists;
+            // AUSBC's openCameraInternal calls setPreviewTexture(view.surfaceTexture) without a
+            // null check and kills the process ("surfaceTexture must not be null") — hit on the
+            // settings/gallery return path, where the open races surface creation. Open now only
+            // if the surface is live, otherwise when it becomes available.
+            if (view.isAvailable) {
+                cam.openCamera(view, request)
+            } else {
+                view.surfaceTextureListener =
+                    object : android.view.TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(
+                            surface: android.graphics.SurfaceTexture,
+                            width: Int,
+                            height: Int,
+                        ) {
+                            view.surfaceTextureListener = null
+                            if (camera == cam) cam.openCamera(view, request)
+                        }
+
+                        override fun onSurfaceTextureSizeChanged(
+                            surface: android.graphics.SurfaceTexture,
+                            width: Int,
+                            height: Int,
+                        ) = Unit
+
+                        override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture) = true
+
+                        override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) = Unit
+                    }
+                // The surface may have appeared between the isAvailable check and the listener
+                // registration; don't strand the open waiting for a callback that already fired.
+                if (view.isAvailable) {
+                    view.surfaceTextureListener = null
+                    cam.openCamera(view, request)
+                }
+            }
             camera = cam
         }
 
@@ -494,28 +614,35 @@ class AusbcCameraController
                 val vw = view.width.toFloat()
                 val vh = view.height.toFloat()
                 if (vw <= 0f || vh <= 0f) return@post
-                val viewAspect = vw / vh
-                val streamAspect = size.width.toFloat() / size.height
-                val (scaleX, scaleY) =
-                    if (streamAspect >= viewAspect) {
-                        1f to viewAspect / streamAspect
-                    } else {
-                        streamAspect / viewAspect to 1f
-                    }
-                view.setTransform(Matrix().apply { setScale(scaleX, scaleY, vw / 2f, vh / 2f) })
+                view.setTransform(
+                    previewTransformMatrix(size.width, size.height, vw, vh, rotationDegrees, mirrored),
+                )
             }
         }
 
         override fun setRotation(degrees: Int) {
-            // 3.2.7 has no render-side rotation; rotate the preview surface itself.
+            // 3.2.7 has no render-side rotation; rotate inside the content transform, where
+            // the letterbox math accounts for the swapped aspect on 90°/270°.
             rotationDegrees = degrees
-            previewView?.rotation = degrees.toFloat()
+            applyPreviewTransform(currentSize)
         }
 
         override fun setMirror(mirrored: Boolean) {
-            // 3.2.7 has no render-side flip; mirror the preview surface horizontally.
+            // 3.2.7 has no render-side flip; mirror inside the content transform.
             this.mirrored = mirrored
-            previewView?.scaleX = if (mirrored) -1f else 1f
+            applyPreviewTransform(currentSize)
+        }
+
+        override fun setZoom(
+            zoom: Float,
+            offsetX: Float,
+            offsetY: Float,
+        ) {
+            // Display-side zoom lives in the Compose layer; retained here only so photo
+            // captures can crop to the visible region.
+            zoomFactor = zoom
+            zoomOffsetX = offsetX
+            zoomOffsetY = offsetY
         }
 
         override fun setBrightness(percent: Int) {
@@ -543,9 +670,10 @@ class AusbcCameraController
             val raw =
                 grabBitmap(size.width, size.height)
                     ?: return Result.failure(IllegalStateException("no preview frame yet"))
+            val cropped = cropToVisible(raw, size)
             return withContext(Dispatchers.IO) {
                 runCatching {
-                    val bitmap = bakeOrientation(raw, rotationDegrees, mirrored)
+                    val bitmap = bakeOrientation(cropped, rotationDegrees, mirrored)
                     try {
                         FileOutputStream(target).use { out ->
                             val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
@@ -557,6 +685,28 @@ class AusbcCameraController
                     target
                 }
             }
+        }
+
+        /** Crop a grabbed frame to the pinch-zoomed visible region; full frame at 1× zoom. */
+        private fun cropToVisible(
+            raw: Bitmap,
+            size: Resolution,
+        ): Bitmap {
+            val vw = previewView?.width?.toFloat() ?: 0f
+            val vh = previewView?.height?.toFloat() ?: 0f
+            val crop =
+                if (zoomFactor <= 1f || vw <= 0f || vh <= 0f) {
+                    null
+                } else {
+                    visibleStreamRect(
+                        size.width, size.height, vw, vh,
+                        rotationDegrees, mirrored, zoomFactor, zoomOffsetX, zoomOffsetY,
+                    ).takeIf { it.width() < size.width || it.height() < size.height }
+                }
+            if (crop == null) return raw
+            val cropped = Bitmap.createBitmap(raw, crop.left, crop.top, crop.width(), crop.height())
+            if (cropped != raw) raw.recycle()
+            return cropped
         }
 
         override suspend fun startRecording(
@@ -581,7 +731,13 @@ class AusbcCameraController
                             // playback); mirror is baked per-frame. Fixed at record start.
                             orientationHintDegrees = rotationDegrees,
                             mirrored = mirrored,
-                            frameProvider = { view.takeIf { it.isAvailable }?.getBitmap(w, h) },
+                            // Crop each frame to the pinch-zoomed visible region (live-follows
+                            // zoom); the recorder letterboxes non-matching aspects.
+                            frameProvider = {
+                                view.takeIf { it.isAvailable }
+                                    ?.getBitmap(w, h)
+                                    ?.let { cropToVisible(it, Resolution(w, h)) }
+                            },
                         )
                     recorder.start()
                     videoRecorder = recorder

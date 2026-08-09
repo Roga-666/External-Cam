@@ -50,6 +50,17 @@ interface CameraController {
 
     fun getContrast(): Int?
 
+    /**
+     * Mirror the UI's pinch-zoom state (scale around the view center plus pan offset in view
+     * pixels) so photo captures can crop to the visible region. Display itself is handled by
+     * the UI layer.
+     */
+    fun setZoom(
+        zoom: Float,
+        offsetX: Float,
+        offsetY: Float,
+    )
+
     /** Capture a JPEG into [target]. */
     suspend fun capturePhoto(target: File): Result<File>
 

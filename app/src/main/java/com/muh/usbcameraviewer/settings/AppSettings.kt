@@ -23,4 +23,6 @@ data class AppSettings(
     val recordAudio: Boolean = false,
     val filenamePrefix: String = "UCV",
     val keepScreenOn: Boolean = true,
+    val brightnessPercent: Int? = null,
+    val contrastPercent: Int? = null,
 )

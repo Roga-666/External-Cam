@@ -104,15 +104,7 @@ class ViewerViewModel
                 is CameraEvent.PermissionGranted -> _state.value = CameraUiState.Connecting(event.deviceName)
                 is CameraEvent.PermissionDenied -> _state.value = CameraUiState.PermissionNeeded(event.deviceName)
                 CameraEvent.NoUsbHost -> _state.value = CameraUiState.Error(CameraError.NoUsbHostSupport)
-                is CameraEvent.Opened ->
-                    _state.value =
-                        CameraUiState.Streaming(
-                            deviceName = event.deviceName,
-                            resolution = event.resolution,
-                            availableResolutions = event.availableResolutions,
-                            brightnessPercent = controller.getBrightness(),
-                            contrastPercent = controller.getContrast(),
-                        )
+                is CameraEvent.Opened -> onOpened(event)
                 is CameraEvent.OpenFailed ->
                     _state.value =
                         CameraUiState.Error(CameraError.OpenFailed(event.reason))
@@ -121,6 +113,23 @@ class ViewerViewModel
                 CameraEvent.Detached -> _state.value = CameraUiState.NoDevice
                 CameraEvent.ShutterPressed -> onShutter()
                 is CameraEvent.RecordingFinalized -> onRecordingFinalized(event.file)
+            }
+        }
+
+        private fun onOpened(event: CameraEvent.Opened) {
+            viewModelScope.launch {
+                // Restore persisted image controls; fall back to what the device reports.
+                val saved = settingsRepository.settings.first()
+                val brightness = saved.brightnessPercent?.also { controller.setBrightness(it) }
+                val contrast = saved.contrastPercent?.also { controller.setContrast(it) }
+                _state.value =
+                    CameraUiState.Streaming(
+                        deviceName = event.deviceName,
+                        resolution = event.resolution,
+                        availableResolutions = event.availableResolutions,
+                        brightnessPercent = brightness ?: controller.getBrightness(),
+                        contrastPercent = contrast ?: controller.getContrast(),
+                    )
             }
         }
 
@@ -234,8 +243,11 @@ class ViewerViewModel
             // it off the main thread so the UI never freezes. Some cameras advertise a mode they
             // cannot actually stream (e.g. 1080p) and deliver a black frame — after switching, verify
             // the preview is live and, if not, revert to the previous resolution with a message.
-            val previous = (_state.value as? CameraUiState.Streaming)?.resolution ?: return
-            if (previous == resolution) return
+            val s = _state.value as? CameraUiState.Streaming ?: return
+            val previous = s.resolution
+            // Mid-record the stop/start renegotiation would freeze seconds of the file, and a
+            // second switch while one is renegotiating would drive the UVC stream concurrently.
+            if (previous == resolution || s.isRecording || _switchingResolution.value) return
             _switchingResolution.value = true
             viewModelScope.launch {
                 try {
@@ -272,13 +284,22 @@ class ViewerViewModel
             val s = _state.value as? CameraUiState.Streaming ?: return
             controller.setBrightness(percent)
             _state.value = s.copy(brightnessPercent = percent)
+            viewModelScope.launch { settingsRepository.setBrightnessPercent(percent) }
         }
 
         fun onContrast(percent: Int) {
             val s = _state.value as? CameraUiState.Streaming ?: return
             controller.setContrast(percent)
             _state.value = s.copy(contrastPercent = percent)
+            viewModelScope.launch { settingsRepository.setContrastPercent(percent) }
         }
+
+        /** UI pinch-zoom changed; forwarded so photo captures crop to the visible region. */
+        fun onZoomChanged(
+            zoom: Float,
+            offsetX: Float,
+            offsetY: Float,
+        ) = controller.setZoom(zoom, offsetX, offsetY)
 
         fun onToggleMirror() {
             val s = _state.value as? CameraUiState.Streaming ?: return

@@ -89,6 +89,16 @@ class FakeCameraController : CameraController {
 
     override fun getContrast(): Int? = fakeContrast
 
+    val zoomCalls = mutableListOf<Triple<Float, Float, Float>>()
+
+    override fun setZoom(
+        zoom: Float,
+        offsetX: Float,
+        offsetY: Float,
+    ) {
+        zoomCalls += Triple(zoom, offsetX, offsetY)
+    }
+
     override suspend fun capturePhoto(target: File): Result<File> = photoResult(target)
 
     override suspend fun startRecording(

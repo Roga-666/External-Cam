@@ -26,6 +26,8 @@ class SettingsRepository
             val recordAudio = booleanPreferencesKey("record_audio")
             val filenamePrefix = stringPreferencesKey("filename_prefix")
             val keepScreenOn = booleanPreferencesKey("keep_screen_on")
+            val brightnessPercent = intPreferencesKey("brightness_percent")
+            val contrastPercent = intPreferencesKey("contrast_percent")
         }
 
         val settings: Flow<AppSettings> =
@@ -49,6 +51,8 @@ class SettingsRepository
                         p[Keys.filenamePrefix]?.takeIf { it.isNotBlank() }
                             ?: defaults.filenamePrefix,
                     keepScreenOn = p[Keys.keepScreenOn] ?: defaults.keepScreenOn,
+                    brightnessPercent = p[Keys.brightnessPercent],
+                    contrastPercent = p[Keys.contrastPercent],
                 )
             }
 
@@ -69,6 +73,10 @@ class SettingsRepository
             dataStore.edit { it[Keys.filenamePrefix] = sanitizePrefix(value) }
 
         suspend fun setKeepScreenOn(value: Boolean) = dataStore.edit { it[Keys.keepScreenOn] = value }
+
+        suspend fun setBrightnessPercent(value: Int) = dataStore.edit { it[Keys.brightnessPercent] = value }
+
+        suspend fun setContrastPercent(value: Int) = dataStore.edit { it[Keys.contrastPercent] = value }
 
         private companion object {
             private val slashes = Regex("""[/\\]""")

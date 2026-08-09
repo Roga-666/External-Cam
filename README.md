@@ -48,9 +48,9 @@
 
 ## Usage
 
-- **Viewer** — shutter button takes a photo; toggle to video mode to record (timer chip shows elapsed time). Resolution chip opens the mode picker; rotate cycles 90° steps; mirror flips the preview.
+- **Viewer** — shutter button takes a photo; toggle to video mode to record (timer chip shows elapsed time). Resolution chip opens the mode picker (disabled while recording); rotate cycles 90° steps; mirror flips the preview; the tune icon opens brightness/contrast sliders (persisted across sessions). Pinch to zoom and pan the live picture. Rotation, mirror, and zoom are baked into captured photos and videos (video rotation rides as playback metadata). A recording interrupted by unplugging or navigating away is saved with what was captured so far.
 - **Gallery** — tap the thumbnail shortcut. Pinch to zoom photos, tap play on videos (opens your system player), share or delete from the top bar.
-- **Settings** — startup resolution policy, video quality (currently no effect — see Known limitations), filename prefix, keep-screen-on, open-source licenses.
+- **Settings** — startup resolution policy, video quality (bitrate of recorded video), microphone audio, filename prefix, keep-screen-on, open-source licenses.
 
 ## Troubleshooting
 
@@ -60,7 +60,7 @@
 | No permission dialog after replug | Unplug, wait a second, replug; or tap **Grant permission** on the permission screen. |
 | Stuck on "Connecting…" forever | The Camera permission was denied. Grant it in Android Settings → Apps → USB Camera Viewer → Permissions; Android blocks USB video access without it. |
 | Camera opens but no picture | Some non-UVC cameras enumerate but aren't supported — verify the camera is UVC-class. |
-| Videos have no sound | By design — see Known limitations. |
+| Videos have no sound | Enable **Record microphone audio** in Settings (off by default; sound comes from the phone microphone — UVC endoscopes have none). |
 
 ## Build & development
 

@@ -2,6 +2,8 @@ package com.muh.usbcameraviewer.camera
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.RectF
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,5 +89,66 @@ class BakeOrientationTest {
         val out = bakeOrientation(bitmap2x1(Color.RED, Color.BLUE), rotationDegrees = 450, mirrored = false)
         assertEquals(1, out.width)
         assertEquals(2, out.height)
+    }
+}
+
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [34])
+class PreviewTransformTest {
+    private fun shownRect(
+        degrees: Int,
+        mirrored: Boolean = false,
+    ): RectF {
+        val m = previewTransformMatrix(640, 480, 1080f, 1920f, degrees, mirrored)
+        val rect = RectF(0f, 0f, 1080f, 1920f)
+        m.mapRect(rect)
+        return rect
+    }
+
+    private fun assertRect(
+        expected: RectF,
+        actual: RectF,
+    ) {
+        assertEquals(expected.left, actual.left, 1e-3f)
+        assertEquals(expected.top, actual.top, 1e-3f)
+        assertEquals(expected.right, actual.right, 1e-3f)
+        assertEquals(expected.bottom, actual.bottom, 1e-3f)
+    }
+
+    @Test
+    fun `unrotated stream letterboxes to 4-3 within portrait view`() {
+        assertRect(RectF(0f, 555f, 1080f, 1365f), shownRect(degrees = 0))
+    }
+
+    @Test
+    fun `quarter-turned stream letterboxes with inverted aspect`() {
+        assertRect(RectF(0f, 240f, 1080f, 1680f), shownRect(degrees = 90))
+    }
+
+    @Test
+    fun `mirror does not change the letterbox bounds`() {
+        assertRect(shownRect(degrees = 0), shownRect(degrees = 0, mirrored = true))
+    }
+}
+
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [34])
+class VisibleStreamRectTest {
+    @Test
+    fun `zoom 1 sees the whole stream`() {
+        val r = visibleStreamRect(640, 480, 1080f, 1920f, 0, false, 1f, 0f, 0f)
+        assertEquals(Rect(0, 0, 640, 480), r)
+    }
+
+    @Test
+    fun `centered 2x zoom sees the middle quarter`() {
+        val r = visibleStreamRect(480, 480, 480f, 480f, 0, false, 2f, 0f, 0f)
+        assertEquals(Rect(120, 120, 360, 360), r)
+    }
+
+    @Test
+    fun `pan right shifts the visible region left in stream coords`() {
+        val r = visibleStreamRect(480, 480, 480f, 480f, 0, false, 2f, 120f, 0f)
+        assertEquals(Rect(60, 120, 300, 360), r)
     }
 }

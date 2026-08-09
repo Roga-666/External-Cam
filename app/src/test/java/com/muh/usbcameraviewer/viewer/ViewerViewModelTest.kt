@@ -354,6 +354,52 @@ class ViewerViewModelTest {
         }
 
     @Test
+    fun `resolution switch is blocked while recording`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
+            vm.onToggleCaptureMode()
+            vm.onShutter() // start recording
+            vm.onSelectResolution(res1080)
+            assertTrue(fake.resolutionCalls.isEmpty())
+            // Stop the recording so its ticker coroutine ends and runTest can go idle.
+            vm.onShutter()
+        }
+
+    @Test
+    fun `zoom changes forward to controller`() =
+        runTest {
+            val vm = vm()
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            vm.onZoomChanged(2f, 30f, -10f)
+            assertEquals(listOf(Triple(2f, 30f, -10f)), fake.zoomCalls)
+        }
+
+    @Test
+    fun `persisted brightness and contrast are applied on open`() =
+        runTest {
+            val settings = settingsRepo()
+            settings.setBrightnessPercent(80)
+            settings.setContrastPercent(20)
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720)))
+            assertEquals(listOf(80), fake.brightnessCalls)
+            assertEquals(listOf(20), fake.contrastCalls)
+            val s = vm.state.value as CameraUiState.Streaming
+            assertEquals(80, s.brightnessPercent)
+            assertEquals(20, s.contrastPercent)
+        }
+
+    @Test
     fun `brightness and contrast forward to controller and update state`() =
         runTest {
             val vm = vm()

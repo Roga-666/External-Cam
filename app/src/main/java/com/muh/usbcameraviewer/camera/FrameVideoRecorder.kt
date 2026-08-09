@@ -137,7 +137,26 @@ class FrameVideoRecorder(
                 canvas.save()
                 canvas.scale(-1f, 1f, width / 2f, height / 2f)
             }
-            canvas.drawBitmap(bitmap, Rect(0, 0, bitmap.width, bitmap.height), dstRect, null)
+            // Zoom-cropped frames can have a different aspect than the encoder surface;
+            // letterbox instead of stretching.
+            val srcAspect = bitmap.width.toFloat() / bitmap.height
+            val dstAspect = width.toFloat() / height
+            val dst =
+                when {
+                    srcAspect > dstAspect -> {
+                        val h = (width / srcAspect).toInt()
+                        val top = (height - h) / 2
+                        Rect(0, top, width, top + h)
+                    }
+                    srcAspect < dstAspect -> {
+                        val w = (height * srcAspect).toInt()
+                        val left = (width - w) / 2
+                        Rect(left, 0, left + w, height)
+                    }
+                    else -> dstRect
+                }
+            if (dst != dstRect) canvas.drawColor(android.graphics.Color.BLACK)
+            canvas.drawBitmap(bitmap, Rect(0, 0, bitmap.width, bitmap.height), dst, null)
             if (mirrored) canvas.restore()
         } finally {
             inputSurface.unlockCanvasAndPost(canvas)

@@ -18,6 +18,8 @@
     <string name="brightness">Brightness</string>
     <string name="contrast">Contrast</string>
     <string name="cd_adjust_image">Adjust brightness and contrast</string>
+    <string name="cd_zoom_in">Zoom in</string>
+    <string name="cd_zoom_out">Zoom out</string>
     <string name="retry">Retry</string>
     <string name="cd_shutter">Take photo</string>
     <string name="cd_record_start">Start recording</string>

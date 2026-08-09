@@ -1,6 +1,7 @@
 // ViewerCallbacks is intentionally kept in this file alongside the ViewerScreen it configures,
 // rather than split into its own file, since the two are never used independently.
-@file:Suppress("MatchingDeclarationName")
+// TooManyFunctions: the viewer is one cohesive screen; its private sub-composables belong here.
+@file:Suppress("MatchingDeclarationName", "TooManyFunctions")
 
 package com.muh.usbcameraviewer.viewer
 
@@ -13,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,10 +30,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Rotate90DegreesCw
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -74,6 +78,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -100,6 +105,7 @@ data class ViewerCallbacks(
     val onToggleMirror: () -> Unit = {},
     val onBrightness: (Int) -> Unit = {},
     val onContrast: (Int) -> Unit = {},
+    val onZoomChanged: (Float, Float, Float) -> Unit = { _, _, _ -> },
     val onShutter: () -> Unit = {},
     val onToggleCaptureMode: () -> Unit = {},
     val onOpenGallery: () -> Unit = {},
@@ -185,6 +191,7 @@ fun ViewerScreen(
                     onToggleMirror = viewModel::onToggleMirror,
                     onBrightness = viewModel::onBrightness,
                     onContrast = viewModel::onContrast,
+                    onZoomChanged = viewModel::onZoomChanged,
                     onShutter = viewModel::onShutter,
                     onToggleCaptureMode = viewModel::onToggleCaptureMode,
                     onOpenGallery = onOpenGallery,
@@ -218,6 +225,8 @@ fun ViewerScreen(
 private const val FLASH_PEAK_ALPHA = 0.75f
 private const val FLASH_FADE_MS = 320
 private const val MAX_ZOOM = 5f
+private const val DOUBLE_TAP_ZOOM = 2f
+private const val ZOOM_STEP = 0.5f
 
 /** Resolve a one-shot ViewModel message to its localized text. */
 private fun ViewerMessage.resolve(context: android.content.Context): String =
@@ -350,7 +359,11 @@ private fun CenteredMessage(
     }
 }
 
-/** Pinch-zoom + pan around the preview, display-only (captures unaffected); resets on stream end. */
+/**
+ * Pinch-zoom + pan around the preview; captures crop to the visible region via onZoomChanged.
+ * Double-tap toggles 1×/2×; the +/− buttons give TalkBack (and one-handed) users the same
+ * control as the pinch gesture. Resets when the stream ends.
+ */
 @Composable
 private fun ZoomablePreview(
     streaming: Boolean,
@@ -359,11 +372,20 @@ private fun ZoomablePreview(
     var zoom by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
+
+    fun applyZoom(
+        newZoom: Float,
+        newOffset: Offset,
+    ) {
+        zoom = newZoom.coerceIn(1f, MAX_ZOOM)
+        val maxX = (zoom - 1f) * containerSize.width / 2f
+        val maxY = (zoom - 1f) * containerSize.height / 2f
+        offset = Offset(newOffset.x.coerceIn(-maxX, maxX), newOffset.y.coerceIn(-maxY, maxY))
+        callbacks.onZoomChanged(zoom, offset.x, offset.y)
+    }
+
     LaunchedEffect(streaming) {
-        if (!streaming) {
-            zoom = 1f
-            offset = Offset.Zero
-        }
+        if (!streaming) applyZoom(1f, Offset.Zero)
     }
     Box(
         Modifier
@@ -372,15 +394,18 @@ private fun ZoomablePreview(
             .onSizeChanged { containerSize = it }
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, gestureZoom, _ ->
-                    zoom = (zoom * gestureZoom).coerceIn(1f, MAX_ZOOM)
-                    val maxX = (zoom - 1f) * containerSize.width / 2f
-                    val maxY = (zoom - 1f) * containerSize.height / 2f
-                    offset =
-                        Offset(
-                            (offset.x * gestureZoom + pan.x).coerceIn(-maxX, maxX),
-                            (offset.y * gestureZoom + pan.y).coerceIn(-maxY, maxY),
-                        )
+                    applyZoom(
+                        zoom * gestureZoom,
+                        Offset(offset.x * gestureZoom + pan.x, offset.y * gestureZoom + pan.y),
+                    )
                 }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        applyZoom(if (zoom > 1f) 1f else DOUBLE_TAP_ZOOM, Offset.Zero)
+                    },
+                )
             },
     ) {
         Box(
@@ -394,6 +419,35 @@ private fun ZoomablePreview(
                 },
         ) {
             PreviewSurface(callbacks)
+        }
+        if (streaming) {
+            ZoomControls(
+                zoom = zoom,
+                onStep = { step -> applyZoom(zoom + step, offset) },
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ZoomControls(
+    zoom: Float,
+    onStep: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (zoom > 1f) {
+            Text("%.1f×".format(zoom), color = Color.White, style = MaterialTheme.typography.labelMedium)
+        }
+        IconButton(onClick = { onStep(ZOOM_STEP) }) {
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_zoom_in), tint = Color.White)
+        }
+        IconButton(onClick = { onStep(-ZOOM_STEP) }) {
+            Icon(Icons.Filled.Remove, contentDescription = stringResource(R.string.cd_zoom_out), tint = Color.White)
         }
     }
 }
@@ -486,6 +540,8 @@ private fun StreamingContent(
                     AssistChip(
                         onClick = { resMenu = true },
                         label = { Text(state.resolution.toString()) },
+                        // Mid-record the stream restart would freeze seconds of the file.
+                        enabled = !state.isRecording,
                         modifier =
                             Modifier.semantics {
                                 contentDescription = pickResolutionDescription
@@ -604,20 +660,24 @@ private fun StreamingContent(
                     color = Color.White,
                     style = MaterialTheme.typography.labelMedium,
                 )
+                val brightness = state.brightnessPercent ?: DEFAULT_CONTROL_PERCENT
                 Slider(
-                    value = (state.brightnessPercent ?: DEFAULT_CONTROL_PERCENT).toFloat(),
+                    value = brightness.toFloat(),
                     onValueChange = { callbacks.onBrightness(it.toInt()) },
                     valueRange = 0f..100f,
+                    modifier = Modifier.semantics { stateDescription = "$brightness %" },
                 )
                 Text(
                     stringResource(R.string.contrast),
                     color = Color.White,
                     style = MaterialTheme.typography.labelMedium,
                 )
+                val contrast = state.contrastPercent ?: DEFAULT_CONTROL_PERCENT
                 Slider(
-                    value = (state.contrastPercent ?: DEFAULT_CONTROL_PERCENT).toFloat(),
+                    value = contrast.toFloat(),
                     onValueChange = { callbacks.onContrast(it.toInt()) },
                     valueRange = 0f..100f,
+                    modifier = Modifier.semantics { stateDescription = "$contrast %" },
                 )
             }
         }
