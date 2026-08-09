@@ -3,7 +3,7 @@
 All notable changes to USB Camera Viewer. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
-## [1.1.0] — unreleased
+## [1.1.0] — 2026-08-09
 
 ### Fixed
 - "Plug in your camera" no longer appears after visiting Settings or the Gallery while the
