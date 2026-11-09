@@ -27,3 +27,7 @@
 For each tested camera, record Android version, USB VID/PID, interface classes, formats, supported resolutions, USB hub/power conditions, startup time, capture, recording, unplug/replug, and failures. At present these are planned checks, not claims of verified improvements.
 
 **Privacy:** descriptors are displayed locally and are not transmitted. No INTERNET permission is requested.
+
+## Running the CI checks
+
+The CI workflow runs on pull requests and can also be started manually. On GitHub mobile, use the browser's **Desktop site** mode, open [CI](https://github.com/Roga-666/External-Cam/actions/workflows/ci.yml), select **Run workflow**, and choose `feat/external-cam-foundation`. The workflow must be enabled in the fork's Actions settings. Commits pushed to the open pull request should also start the CI checks automatically.
