@@ -536,8 +536,7 @@ class AusbcCameraController
             resolution: Resolution,
             forceYuyv: Boolean = false,
         ): Boolean {
-            val cam = camera ?: return false
-            val uvc = uvcCameraOf(cam) ?: return false
+            val uvc = camera?.let(::uvcCameraOf) ?: return false
             val device = pendingDevice
             val surface = previewView?.surfaceTexture
             return runCatching {

@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.muh.usbcameraviewer.camera
 
 import android.content.Context
