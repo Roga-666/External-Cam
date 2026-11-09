@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">USB Camera Viewer</string>
+    <string name="app_name">External Cam</string>
     <string name="no_device_title">Plug in your camera</string>
-    <string name="no_device_body">Connect a USB endoscope with a USB-C (OTG) adapter. The app starts automatically when a camera is detected.</string>
+    <string name="no_device_body">Connect a USB webcam, microscope, endoscope, or UVC capture card with a USB-C data adapter. The app starts when a supported camera is detected.</string>
     <string name="permission_needed_title">USB permission needed</string>
     <string name="permission_needed_body">Allow access to %1$s to see its video.</string>
     <string name="grant_permission">Grant permission</string>
@@ -53,8 +53,15 @@
     <string name="settings_filename_prefix">Filename prefix</string>
     <string name="settings_keep_screen_on">Keep screen on while viewing</string>
     <string name="settings_about">About</string>
-    <string name="settings_about_body">USB Camera Viewer %1$s — by muh. Fully offline; no data leaves your device. UVC support via the open-source AUSBC library (Apache-2.0).</string>
+    <string name="settings_about_body">External Cam %1$s — based on USB Camera Viewer by muh. Fully offline; no data leaves your device. UVC support via the open-source AUSBC library (Apache-2.0).</string>
     <string name="settings_licenses">Open-source licenses</string>
     <string name="licenses_title">Open-source licenses</string>
     <string name="licenses_intro">This app bundles the following open-source components. Their license texts are reproduced in full below.</string>
+    <string name="settings_usb_diagnostics">USB diagnostics</string>
+    <string name="settings_usb_diagnostics_hint">Check which USB devices Android can see. A UVC interface is a promising sign, not a guarantee that streaming will work.</string>
+    <string name="settings_usb_refresh">Refresh USB devices</string>
+    <string name="settings_usb_empty">No USB devices detected. Check your USB-C cable, OTG adapter, and power.</string>
+    <string name="settings_usb_uvc_found">UVC video interface detected</string>
+    <string name="settings_usb_uvc_not_found">No UVC video interface detected</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>

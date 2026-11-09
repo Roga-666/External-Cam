@@ -1,134 +1,61 @@
-<p align="center">
-  <img src="docs/assets/logo.svg" width="128" alt="USB Camera Viewer logo">
-</p>
+# External Cam
 
-<h1 align="center">USB Camera Viewer</h1>
+**External Cam** is a free, offline Android USB camera viewer for UVC-compatible webcams, endoscopes, microscopes, borescopes, and USB video capture cards. This project is forked from [USB Camera Viewer by muh](https://github.com/13/usbcameraviewer) and retains the original MIT license and attribution.
 
-<p align="center">
-  Live view, capture, and browse USB (UVC) endoscopes and borescopes on Android — fully offline.
-  <br><em>by muh</em>
-</p>
-
-<!-- Update muh/usbcameraviewer below after pushing this repo to GitHub. -->
-<p align="center">
-  <a href="https://github.com/muh/usbcameraviewer/actions/workflows/release.yml"><img src="https://github.com/muh/usbcameraviewer/actions/workflows/release.yml/badge.svg" alt="Release CI"></a>
-  <a href="https://github.com/muh/usbcameraviewer/releases/latest"><img src="https://img.shields.io/github/v/release/muh/usbcameraviewer" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/API-26%2B-brightgreen.svg" alt="API 26+">
-  <img src="https://img.shields.io/badge/Kotlin-2.1-purple.svg" alt="Kotlin 2.1">
-</p>
+[![CI](https://github.com/Roga-666/External-Cam/actions/workflows/ci.yml/badge.svg)](https://github.com/Roga-666/External-Cam/actions/workflows/ci.yml)
 
 ## Features
 
-- **Live preview** over USB-C OTG — the app offers to open automatically when a UVC camera is plugged in, and recovers from unplug/replug without a restart
-- **Photo capture & MP4 video recording** (optional microphone audio) with a recording timer, capture flash + haptic feedback, and a low-storage guard
-- **Hardware shutter button** — the physical button on the endoscope takes a photo
-- **In-app gallery** — grid with video badges, pinch-zoom viewer, share, delete
-- **Resolution picker, rotate & mirror** (preview transforms), keep-screen-on
-- **Dark, camera-first UI** — Jetpack Compose + Material 3, edge-to-edge
-- **Fully offline** — no INTERNET permission, no analytics, no ads (runtime permissions are Camera — which Android mandates for USB video — and, only if you enable audio, the microphone)
+- USB-C OTG camera preview, automatic connection detection and reconnect handling
+- Photo capture, MP4 recording (optional phone microphone), in-app gallery
+- Resolution selection, rotate/mirror, pinch-to-zoom and pan, brightness/contrast
+- **USB diagnostics:** Settings displays connected USB devices, vendor/product IDs, and whether Android detects a UVC video interface. You can refresh the list after plugging in a device.
+- Fully offline; no analytics, ads, or internet permission
 
-## Screenshots
+USB diagnostics can identify a device but **cannot guarantee** that the bundled UVC engine can stream from it. This initial version still uses AUSBC 3.2.7.
 
-<!-- Fill these after the on-device hardware pass: drop PNGs into docs/assets/screenshots/ -->
-| Viewer | Gallery | Settings |
-|---|---|---|
-| _coming soon_ | _coming soon_ | _coming soon_ |
+## Installation and updates
 
-## Getting started
+The independent Android application ID is `com.roga666.externalcam`, so External Cam installs beside the original USB Camera Viewer. Starting with External Cam v0.1.0 (`versionCode` 1), all published updates must increment `versionCode` and be signed with the **same permanent release keystore**.
 
-**You need:** an Android 8.0+ (API 26) phone with USB host (OTG) support, and a UVC-class USB camera — most inexpensive USB endoscopes/borescopes are UVC.
+**GitHub Releases are intentionally blocked until the signing secrets are configured.** This prevents publishing unsigned APKs that cannot update cleanly.
 
-**Install** — either grab `usb-camera-viewer-<tag>.apk` from the
-[latest release](https://github.com/muh/usbcameraviewer/releases/latest), or build it yourself:
+Create and securely back up a keystore **on your own computer** (never commit it or share its passwords):
 
-    ./build.sh debug --install
-
-**First run:** plug the camera into the phone (USB-C, or via an OTG adapter) → Android asks to open USB Camera Viewer → grant the **Camera** permission (Android requires it to access any USB video device) → tap Allow on the USB permission dialog → live picture.
-
-## Usage
-
-- **Viewer** — shutter button takes a photo; toggle to video mode to record (timer chip shows elapsed time). Resolution chip opens the mode picker (disabled while recording); rotate cycles 90° steps; mirror flips the preview; the tune icon opens brightness/contrast sliders (persisted across sessions). Pinch to zoom and pan the live picture. Rotation, mirror, and zoom are baked into captured photos and videos (video rotation rides as playback metadata). A recording interrupted by unplugging or navigating away is saved with what was captured so far.
-- **Gallery** — tap the thumbnail shortcut. Pinch to zoom photos, tap play on videos (opens your system player), share or delete from the top bar.
-- **Settings** — startup resolution policy, video quality (bitrate of recorded video), microphone audio, filename prefix, keep-screen-on, open-source licenses.
-
-## Troubleshooting
-
-| Problem | Check |
-|---|---|
-| "Plug in your camera" never changes | Phone must support USB host/OTG (the app tells you if it doesn't). Try a data-capable cable/adapter, not charge-only. |
-| No permission dialog after replug | Unplug, wait a second, replug; or tap **Grant permission** on the permission screen. |
-| Stuck on "Connecting…" forever | The Camera permission was denied. Grant it in Android Settings → Apps → USB Camera Viewer → Permissions; Android blocks USB video access without it. |
-| Camera opens but no picture | Some non-UVC cameras enumerate but aren't supported — verify the camera is UVC-class. |
-| Videos have no sound | Enable **Record microphone audio** in Settings (off by default; sound comes from the phone microphone — UVC endoscopes have none). |
-
-## Build & development
-
-    ./build.sh debug              # debug APK
-    ./build.sh release            # release APK (signed if keystore configured)
-    ./build.sh release --gates    # run test/detekt/ktlint/lint first
-    ./build.sh debug --install    # build + adb install
-
-Built APKs are collected into `dist/` (git-ignored) as
-`usb-camera-viewer-<version>-<variant>[-unsigned].apk`.
-
-Quality gates: `./gradlew test detekt ktlintCheck lint`.
-
-**Release signing** (optional — builds are unsigned without it): create `keystore.properties` at the repo root (git-ignored):
-
-    storeFile=/path/to/release.jks
-    storePassword=...
-    keyAlias=...
-    keyPassword=...
-
-`build.sh` also picks up global `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASS`,
-`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASS` environment variables (e.g. from your
-shell profile) when no `keystore.properties`/`UCV_*` vars are set.
-
-**CI releases:** pushing a tag matching `v*` (e.g. `git tag v1.0.0 && git push origin v1.0.0`) runs the quality gates and attaches `usb-camera-viewer-<tag>.apk` to a GitHub Release. For a *signed* CI APK add repository secrets:
-
-| Secret | Value |
-|---|---|
-| `KEYSTORE_B64` | `base64 -w0 release.jks` |
-| `KEYSTORE_PASSWORD` | keystore password |
-| `KEY_ALIAS` | key alias |
-| `KEY_PASSWORD` | key password |
-
-Without secrets the workflow still succeeds and attaches an unsigned APK.
-
-## Architecture
-
-Single-module MVVM. Compose UI observes `StateFlow` from ViewModels; all UVC access is isolated behind a `CameraController` interface.
-
-```mermaid
-flowchart LR
-    UI["Compose UI\n(Viewer / Gallery / Settings)"] --> VM["ViewModels\n(StateFlow)"]
-    VM --> CC["CameraController\n(interface)"]
-    CC --> AC["AusbcCameraController"]
-    AC --> LIB["libausbc 3.2.7\n(libusb / libuvc JNI)"]
-    VM --> CS["CaptureStore"] --> MS[("MediaStore\nPictures/ & Movies/\nUSB Camera Viewer")]
-    VM --> MR["MediaRepository"] --> MS
-    VM --> DS[("DataStore\nsettings")]
+```bash
+keytool -genkeypair -v -keystore external-cam-release.jks -alias externalcam -keyalg RSA -keysize 3072 -validity 10000
 ```
 
-`libausbc` is pinned to **3.2.7** — newer 3.3.x artifacts are broken on JitPack (missing transitive AARs). Only `AusbcCameraController` touches the library, so it can be swapped without touching features. Package map: `camera/` (UVC), `capture/` (files + MediaStore), `viewer/`, `gallery/`, `settings/`, `navigation/`, `ui/theme/`.
+In GitHub repository **Settings → Secrets and variables → Actions**, configure these four repository secrets:
 
-## Hardware testing
+| Secret | Value |
+| --- | --- |
+| `KEYSTORE_B64` | Base64 encoding of the `.jks` file (one line) |
+| `KEYSTORE_PASSWORD` | Keystore password |
+| `KEY_ALIAS` | Key alias (`externalcam` in the example) |
+| `KEY_PASSWORD` | Alias/key password |
 
-Unit tests fake the camera; real UVC behavior needs a device. Run [docs/hardware-test-checklist.md](docs/hardware-test-checklist.md) on a physical phone with an endoscope before shipping a release — the checklist in this repo is an unrun template until then.
+To generate the Base64 value locally on Linux, run `base64 -w0 external-cam-release.jks` and copy the output directly into the GitHub secret. **Back up the .jks and passwords offline:** loss of this key means installed release users cannot receive normal updates signed by a replacement key.
 
-## Known limitations
+A tag `v*` (for example `v0.1.0`) triggers tests, builds and verifies a signed release APK, and attaches it as `External-Cam-v0.1.0.apk`.
 
-- **Capture is frame-based** — the pinned camera library's own photo/video writers require `WRITE_EXTERNAL_STORAGE` (ungrantable on Android 13+), so photos and videos are encoded from the preview frames (TextureView bitmap → JPEG; MediaCodec H.264 + optional AAC audio → MediaMuxer). Recording follows the current preview resolution.
-- **Resolution changes drive the UVC camera directly** — the pinned library's own resizer collapses every request to 640×480, so the app sets the preview size on the underlying camera itself, letterboxed to the correct aspect ratio. If a camera advertises a mode it can't actually stream (some deliver a black frame at 1080p), the app detects the dead stream and automatically reverts to the previous resolution with a message.
-- **No 16 KB page-size support** — the pinned AUSBC 3.2.7 native libraries (libuvc, libusb, libUVCCamera, libjpeg-turbo) ship with 4 KB-aligned ELF LOAD segments (verified with `readelf -lW`). Fixing this requires rebuilding them with `-Wl,-z,max-page-size=16384`; no upstream release does. Sideloading is unaffected, but Google Play's 16 KB requirement for apps targeting Android 15+ blocks Play distribution until the library is rebuilt or replaced.
-- **Single camera** — with multiple UVC devices attached, only the most recently attached one is used; there is no chooser.
-- A 512 px Play Store icon export is not generated (vector-only sources); render the launcher vectors at 512 px when needed.
+Local build: `./gradlew :app:assembleDebug` for development, or `./build.sh release --gates` with a local keystore configured. **Debug APKs use a different signature and cannot update installed release APKs.**
 
-## Contributing
+## Camera compatibility
 
-PRs welcome once the repo is public: keep `./gradlew test detekt ktlintCheck lint` green, follow conventional commits, and note any hardware you verified against.
+Android 8.0+ with USB host/OTG and a UVC-compatible USB camera is required for the current camera backend. A USB-C *data* cable/OTG adapter and sufficient USB power are essential. Open **Settings → USB diagnostics** to inspect the USB device and check for a video interface (class 14). Composite UVC devices can advertise class 0 or 239 at the device level.
 
-## License
+Some proprietary cameras and capture devices do not support UVC and will need additional drivers. Some UVC cameras advertise formats or resolutions they cannot actually stream. The app already tries MJPEG and YUYV for resolution changes and reverts on failed frame verification.
 
-[MIT](LICENSE) © 2026 muh. Bundled third-party components (AUSBC — Apache-2.0, libuvc — BSD-3-Clause, libusb — LGPL-2.1, Coil, AndroidX, Kotlin — Apache-2.0) are listed with full texts in-app under **Settings → Open-source licenses**.
+### Known limitations
+
+- The current AUSBC 3.2.7 native binaries were built for 4 KB memory pages, not 16 KB. They must be rebuilt or replaced before proper support for 16 KB-page devices and compliant Play distribution.
+- Only one camera is selected automatically; a multiple-camera chooser is planned.
+- Live preview and capture quality depend on the UVC hardware and device-supported formats.
+- The original source namespace `com.muh.usbcameraviewer` remains internal for now to avoid risky all-at-once refactoring. The install ID is uniquely `com.roga666.externalcam`.
+
+See [the hardware checklist](docs/hardware-test-checklist.md) and [the compatibility roadmap](docs/compatibility-roadmap.md). Actual camera compatibility requires testing on physical Android devices.
+
+## License and credits
+
+MIT licensed. Based on [13/usbcameraviewer](https://github.com/13/usbcameraviewer) by muh. The original [MIT copyright notice](LICENSE) remains intact. Third-party native components and their license texts are listed in the app under Settings → Open-source licenses.

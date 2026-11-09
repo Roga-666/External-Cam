@@ -34,7 +34,7 @@ interface CaptureStore {
     ): String
 }
 
-private const val ALBUM = "USB Camera Viewer"
+private const val ALBUM = "External Cam"
 
 @Singleton
 class MediaStoreCaptureStore

@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -31,12 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.muh.usbcameraviewer.BuildConfig
 import com.muh.usbcameraviewer.R
+import com.muh.usbcameraviewer.camera.connectedUsbDevices
 
 // Single Compose screen laying out every settings section; splitting it would scatter
 // closely related UI without reducing complexity, so LongMethod is suppressed here.
@@ -49,6 +52,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var usbDevices by remember { mutableStateOf(connectedUsbDevices(context)) }
 
     Scaffold(
         topBar = {
@@ -128,6 +133,41 @@ fun SettingsScreen(
             LaunchedEffect(prefix) {
                 kotlinx.coroutines.delay(400) // debounce
                 if (prefix != settings.filenamePrefix) viewModel.setFilenamePrefix(prefix)
+            }
+            HorizontalDivider()
+
+            SectionLabel(stringResource(R.string.settings_usb_diagnostics))
+            Text(
+                stringResource(R.string.settings_usb_diagnostics_hint),
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(
+                onClick = { usbDevices = connectedUsbDevices(context) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(stringResource(R.string.settings_usb_refresh))
+            }
+            if (usbDevices.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_usb_empty),
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            usbDevices.forEach { device ->
+                val uvcStatus =
+                    if (device.isLikelyUvc) {
+                        stringResource(R.string.settings_usb_uvc_found)
+                    } else {
+                        stringResource(R.string.settings_usb_uvc_not_found)
+                    }
+                ListItem(
+                    headlineContent = { Text(device.displayName) },
+                    supportingContent = {
+                        Text(stringResource(R.string.settings_usb_device_details, device.usbId, uvcStatus))
+                    },
+                )
             }
             HorizontalDivider()
 

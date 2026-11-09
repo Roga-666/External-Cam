@@ -34,15 +34,16 @@ ktlint {
 }
 
 android {
+    // Keep the original source namespace while giving this fork an independent install identity.
     namespace = "com.muh.usbcameraviewer"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.muh.usbcameraviewer"
+        applicationId = "com.roga666.externalcam"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 1
+        versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
