@@ -5,12 +5,13 @@
 - Independent package/application ID and branding without migrating the source namespace
 - USB diagnostic display including VID/PID and video-interface detection (including composite devices)
 - Unit tests for the UVC device-descriptor heuristic
+- YUYV retry for a resolution that accepts MJPEG setup but never delivers frames
 - Signed-only GitHub Releases and clear versionCode progression
 
 ## Phase 2 — camera opening and negotiation
 
 - USB device selector for multiple connected cameras
-- Record attempted format (MJPEG/YUYV), resolution, and error messages per camera
+- Expose detailed attempted format (MJPEG/YUYV), resolution, and error messages per camera
 - Harden reconnect behavior after app resume, USB detaches, and broken hubs
 - Test default format negotiation and recovery with physical cameras
 

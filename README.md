@@ -45,7 +45,7 @@ Local build: `./gradlew :app:assembleDebug` for development, or `./build.sh rele
 
 Android 8.0+ with USB host/OTG and a UVC-compatible USB camera is required for the current camera backend. A USB-C *data* cable/OTG adapter and sufficient USB power are essential. Open **Settings → USB diagnostics** to inspect the USB device and check for a video interface (class 14). Composite UVC devices can advertise class 0 or 239 at the device level.
 
-Some proprietary cameras and capture devices do not support UVC and will need additional drivers. Some UVC cameras advertise formats or resolutions they cannot actually stream. The app already tries MJPEG and YUYV for resolution changes and reverts on failed frame verification.
+Some proprietary cameras and capture devices do not support UVC and will need additional drivers. Some UVC cameras advertise formats or resolutions they cannot actually stream. The app first tries MJPEG and falls back to YUYV if format setup fails. If MJPEG starts but produces no usable frames, External Cam also retries that resolution explicitly in YUYV before reverting to the previous working resolution.
 
 ### Known limitations
 

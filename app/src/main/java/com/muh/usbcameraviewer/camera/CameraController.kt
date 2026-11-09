@@ -35,6 +35,12 @@ interface CameraController {
     /** Change the preview resolution (implementations may restart the stream). Does its own IO. */
     suspend fun setResolution(resolution: Resolution)
 
+    /**
+     * Last-resort fallback for a resolution whose MJPEG stream starts but never supplies frames.
+     * False means the backend cannot switch to YUYV; callers should revert to the last good mode.
+     */
+    suspend fun retryWithYuyv(resolution: Resolution): Boolean = false
+
     fun setRotation(degrees: Int)
 
     fun setMirror(mirrored: Boolean)

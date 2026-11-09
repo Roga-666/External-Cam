@@ -192,6 +192,25 @@ class ViewerViewModelTest {
         }
 
     @Test
+    fun `dead MJPEG stream switches to working YUYV mode instead of reverting`() =
+        runTest {
+            val settings = settingsRepo()
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
+            fake.previewLive = false
+            fake.yuyvSupported = true
+            vm.onSelectResolution(res1080)
+            assertEquals(listOf(res1080), fake.resolutionCalls)
+            assertEquals(listOf(res1080), fake.yuyvCalls)
+            assertEquals(res1080, settings.settings.first().lastResolution)
+        }
+
+    @Test
     fun `preferred resolution from settings passed to open`() =
         runTest {
             val settings = settingsRepo()
