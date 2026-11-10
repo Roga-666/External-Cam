@@ -16,8 +16,8 @@ import android.os.Handler
 import android.os.Looper
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.callback.ICameraStateCallBack
-import com.jiangdg.ausbc.utils.CameraUtils
 import com.jiangdg.ausbc.camera.bean.CameraRequest
+import com.jiangdg.ausbc.utils.CameraUtils
 import com.jiangdg.ausbc.widget.AspectRatioTextureView
 import com.serenegiant.usb.USBMonitor
 import com.serenegiant.usb.UVCCamera
