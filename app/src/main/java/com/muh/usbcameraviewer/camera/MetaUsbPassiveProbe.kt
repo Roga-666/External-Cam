@@ -25,6 +25,7 @@ private const val TEST_DURATION_MS = 3_000L
 private const val TRANSFER_TIMEOUT_MS = 250
 private const val MAX_CAPTURE_BYTES = 32 * 1024
 private const val TRANSFER_BUFFER_BYTES = 4 * 1024
+private const val USB_PERMISSION_REQUEST_CODE = 4_381
 
 /** Only the reported retail-demo interface is eligible; never probe unrelated USB hardware. */
 internal fun matchesMetaRetailTransport(
@@ -137,6 +138,7 @@ class MetaUsbPassiveProbe(
         context.unregisterReceiver(permissionReceiver)
     }
 
+    @Suppress("ReturnCount") // Explicit guards avoid USB access on an unrelated or busy device.
     fun startOnTap() {
         if (activeJob?.isActive == true || awaitingPermission) return
         val device = findDevice()
@@ -156,7 +158,7 @@ class MetaUsbPassiveProbe(
         val permissionIntent =
             PendingIntent.getBroadcast(
                 context,
-                4381,
+                USB_PERMISSION_REQUEST_CODE,
                 Intent(permissionAction).setPackage(context.packageName),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -185,6 +187,7 @@ class MetaUsbPassiveProbe(
             }
     }
 
+    @Suppress("ReturnCount") // Every early failure path releases the claimed interface in finally.
     private fun readOnlyProbe(device: UsbDevice): MetaProbeState {
         val intf = device.atcInterface() ?: return MetaProbeState.MissingDevice
         if (!usbManager.hasPermission(device)) return MetaProbeState.PermissionDenied
