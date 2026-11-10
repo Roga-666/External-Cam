@@ -9,6 +9,7 @@ import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,21 @@ private const val TRANSFER_TIMEOUT_MS = 250
 private const val MAX_CAPTURE_BYTES = 32 * 1024
 private const val TRANSFER_BUFFER_BYTES = 4 * 1024
 private const val USB_PERMISSION_REQUEST_CODE = 4_381
+
+/**
+ * USB grants are defined by UsbManager.hasPermission, NOT by whether the result
+ * broadcast contains EXTRA_PERMISSION_GRANTED. An immutable PendingIntent may
+ * silently strip extras added by the system, reporting a false denial.
+ */
+internal fun resolveProbePermission(
+    devicePresent: Boolean,
+    systemHasPermission: Boolean,
+): MetaProbeState =
+    when {
+        !devicePresent -> MetaProbeState.MissingDevice
+        systemHasPermission -> MetaProbeState.Running
+        else -> MetaProbeState.PermissionDenied
+    }
 
 /** Only the reported retail-demo interface is eligible; never probe unrelated USB hardware. */
 internal fun matchesMetaRetailTransport(
@@ -112,13 +128,17 @@ class MetaUsbPassiveProbe(
                 if (intent.action != permissionAction || !awaitingPermission) return
                 awaitingPermission = false
                 val device = findDevice()
-                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) &&
-                    device != null &&
-                    usbManager.hasPermission(device)
-                ) {
+                // The USB service's actual grant is authoritative. Do not require the
+                // callback extra: earlier versions' immutable PendingIntent lost it.
+                val outcome =
+                    resolveProbePermission(
+                        devicePresent = device != null,
+                        systemHasPermission = device?.let(usbManager::hasPermission) == true,
+                    )
+                if (outcome == MetaProbeState.Running && device != null) {
                     start(device)
                 } else {
-                    onState(MetaProbeState.PermissionDenied)
+                    onState(outcome)
                 }
             }
         }
@@ -152,15 +172,19 @@ class MetaUsbPassiveProbe(
         }
         awaitingPermission = true
         onState(MetaProbeState.WaitingPermission)
-        // Android's USB permission API officially supports immutable PendingIntents.
-        // A mutable PendingIntent with a package-only (non-component) Intent is rejected
-        // on Android 14+; keep the response app-scoped and immutable instead.
+        // UsbManager returns its permission result by filling in PendingIntent extras.
+        // On Android 12+, use MUTABLE so the system can populate them. The Intent is
+        // restricted to this app's package (required for mutable intents on Android 14+).
+        // CANCEL_CURRENT also discards any cached immutable PendingIntent from v0.1.3.
+        val flags =
+            PendingIntent.FLAG_CANCEL_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
         val permissionIntent =
             PendingIntent.getBroadcast(
                 context,
                 USB_PERMISSION_REQUEST_CODE,
                 Intent(permissionAction).setPackage(context.packageName),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                flags,
             )
         try {
             usbManager.requestPermission(device, permissionIntent)

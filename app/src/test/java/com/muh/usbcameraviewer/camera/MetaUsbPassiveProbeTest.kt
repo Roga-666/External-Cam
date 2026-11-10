@@ -7,6 +7,23 @@ import org.junit.Test
 
 class MetaUsbPassiveProbeTest {
     @Test
+    fun permissionCallbackWithMissingExtraStillUsesAndroidActualGrant() {
+        assertTrue(resolveProbePermission(devicePresent = true, systemHasPermission = true) == MetaProbeState.Running)
+    }
+
+    @Test
+    fun missingDeviceAndRealDenialAreDifferentOutcomes() {
+        assertTrue(
+            resolveProbePermission(devicePresent = false, systemHasPermission = false) ==
+                MetaProbeState.MissingDevice,
+        )
+        assertTrue(
+            resolveProbePermission(devicePresent = true, systemHasPermission = false) ==
+                MetaProbeState.PermissionDenied,
+        )
+    }
+
+    @Test
     fun recognizesReportedAtcDemoInterface() {
         assertTrue(matchesMetaRetailTransport(0x2833, 0x00A0, UsbConstants.USB_CLASS_VENDOR_SPEC, 1, 1))
     }
