@@ -11,6 +11,7 @@ import com.muh.usbcameraviewer.camera.CameraUiState
 import com.muh.usbcameraviewer.camera.CaptureMode
 import com.muh.usbcameraviewer.camera.Resolution
 import com.muh.usbcameraviewer.ui.theme.UcvTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -41,6 +42,32 @@ class ViewerScreenTest {
     fun noDevice_showsPlugInHelp() {
         setContent(CameraUiState.NoDevice)
         compose.onNodeWithText("Plug in your camera").assertIsDisplayed()
+    }
+
+    @Test
+    fun noDevice_canOpenSettingsAndUsbDiagnostics() {
+        var opens = 0
+        setContent(
+            CameraUiState.NoDevice,
+            ViewerCallbacks(onOpenSettings = { opens++ }),
+        )
+        compose.onNodeWithContentDescription("Open settings").assertIsDisplayed()
+        compose.onNodeWithText("USB diagnostics").performClick()
+        assertEquals(1, opens)
+        compose.onNodeWithContentDescription("Open settings").performClick()
+        assertEquals(2, opens)
+        compose.onNodeWithContentDescription("Open gallery").assertIsDisplayed()
+    }
+
+    @Test
+    fun error_canOpenSettingsWithoutACamera() {
+        var opened = false
+        setContent(
+            CameraUiState.Error(CameraError.OpenFailed("no device")),
+            ViewerCallbacks(onOpenSettings = { opened = true }),
+        )
+        compose.onNodeWithContentDescription("Open settings").performClick()
+        assertTrue(opened)
     }
 
     @Test
@@ -91,6 +118,7 @@ class ViewerScreenTest {
         compose.onNodeWithContentDescription("Take photo").assertIsDisplayed()
         compose.onNodeWithContentDescription("Rotate preview").assertIsDisplayed()
         compose.onNodeWithContentDescription("Open gallery").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open settings").assertIsDisplayed()
         compose.onNodeWithContentDescription("Choose resolution").assertIsDisplayed()
     }
 
