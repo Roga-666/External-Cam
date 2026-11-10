@@ -2,7 +2,12 @@ name: Signed Release
 
 on:
   push:
+    # One-time first release triggered by merging the bootstrap file to main.
+    # Later normal code changes will not publish releases.
+    branches: [main]
     tags: ["v*"]
+    paths:
+      - docs/first-release-trigger.md
 
 permissions:
   contents: write
@@ -22,6 +27,15 @@ jobs:
 
       - name: Quality gates
         run: ./gradlew test detekt ktlintCheck lint
+
+      - name: Resolve release tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "branch" ]; then
+            RELEASE_TAG="v0.1.0"
+          else
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          fi
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
 
       # A different signature would prevent in-place Android updates.
       # Never publish a release artifact unless the permanent signing key is configured.
@@ -55,10 +69,13 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose "$APK"
-          cp "$APK" "External-Cam-${GITHUB_REF_NAME}.apk"
+          cp "$APK" "External-Cam-${RELEASE_TAG}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: External Cam ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           files: External-Cam-*.apk
           generate_release_notes: true
