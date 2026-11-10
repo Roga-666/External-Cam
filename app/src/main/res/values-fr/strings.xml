@@ -64,4 +64,14 @@
     <string name="settings_usb_uvc_found">Interface vidéo UVC détectée</string>
     <string name="settings_usb_uvc_not_found">Aucune interface vidéo UVC détectée</string>
     <string name="settings_usb_device_details">%1$s · %2$s</string>
+    <string name="meta_probe_title">Test USB de démonstration Meta</string>
+    <string name="meta_probe_hint">Diagnostic en lecture seule de l’interface ATC USB. Déconnectez d’abord la tablette de démonstration. Le test réclame brièvement l’interface sans envoyer de commandes ni enregistrer de données.</string>
+    <string name="meta_probe_button">Tester les données USB entrantes (3 secondes)</string>
+    <string name="meta_probe_waiting">Autorisez l’accès USB Android pour démarrer le test.</string>
+    <string name="meta_probe_running">Lecture du point Bulk IN 0x81 sans commandes…</string>
+    <string name="meta_probe_missing">L’appareil Meta ou son interface ATC n’est plus disponible.</string>
+    <string name="meta_probe_denied">Accès USB non autorisé.</string>
+    <string name="meta_probe_error">Impossible d’ouvrir ou de réclamer l’interface USB.</string>
+    <string name="meta_probe_silent">Aucune donnée reçue. Cela n’exclut pas la vidéo : l’appareil peut attendre une commande d’initialisation.</string>
+    <string name="meta_probe_received">%1$d octets reçus en %2$d lectures. Cela confirme des données USB, pas nécessairement de la vidéo.</string>
 </resources>

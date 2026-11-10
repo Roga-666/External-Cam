@@ -64,4 +64,14 @@
     <string name="settings_usb_uvc_found">Interfaz de vídeo UVC detectada</string>
     <string name="settings_usb_uvc_not_found">No se detectó ninguna interfaz de vídeo UVC</string>
     <string name="settings_usb_device_details">%1$s · %2$s</string>
+    <string name="meta_probe_title">Prueba USB de demostración Meta</string>
+    <string name="meta_probe_hint">Diagnóstico de solo lectura de ATC USB. Desconecta primero la tableta de demostración. La prueba reclama brevemente la interfaz sin enviar comandos ni guardar datos.</string>
+    <string name="meta_probe_button">Probar datos USB entrantes (3 segundos)</string>
+    <string name="meta_probe_waiting">Autoriza el acceso USB de Android para iniciar la prueba.</string>
+    <string name="meta_probe_running">Leyendo el punto de entrada 0x81 sin enviar comandos…</string>
+    <string name="meta_probe_missing">El dispositivo USB Meta o su interfaz ATC ya no están disponibles.</string>
+    <string name="meta_probe_denied">No se concedió permiso USB.</string>
+    <string name="meta_probe_error">No se pudo abrir ni reclamar la interfaz USB.</string>
+    <string name="meta_probe_silent">No se recibieron datos. Esto no descarta el vídeo: el dispositivo podría esperar un comando de inicio.</string>
+    <string name="meta_probe_received">Se recibieron %1$d bytes en %2$d lecturas. Confirma datos USB, no necesariamente vídeo.</string>
 </resources>

@@ -64,4 +64,14 @@
     <string name="settings_usb_uvc_found">UVC-Videoschnittstelle erkannt</string>
     <string name="settings_usb_uvc_not_found">Keine UVC-Videoschnittstelle erkannt</string>
     <string name="settings_usb_device_details">%1$s · %2$s</string>
+    <string name="meta_probe_title">Meta-Demo: USB-Test</string>
+    <string name="meta_probe_hint">Lesetest für die ATC-USB-Schnittstelle. Zuerst vom Demo-Tablet trennen. Der Test beansprucht kurz die Schnittstelle, sendet keine Gerätebefehle und speichert keine Daten.</string>
+    <string name="meta_probe_button">Eingehende USB-Daten testen (3 Sekunden)</string>
+    <string name="meta_probe_waiting">USB-Zugriff in Android erlauben, um den Test zu starten.</string>
+    <string name="meta_probe_running">Lese Bulk-IN-Endpunkt 0x81 ohne Befehle…</string>
+    <string name="meta_probe_missing">Meta-Demogerät oder ATC-Schnittstelle nicht mehr verfügbar.</string>
+    <string name="meta_probe_denied">USB-Zugriff nicht erlaubt.</string>
+    <string name="meta_probe_error">USB-Schnittstelle konnte nicht geöffnet oder beansprucht werden.</string>
+    <string name="meta_probe_silent">Keine Daten empfangen. Video ist dennoch möglich: Das Gerät erwartet vielleicht einen Initialisierungsbefehl.</string>
+    <string name="meta_probe_received">%1$d Bytes in %2$d Lesevorgängen empfangen. Das belegt USB-Daten, aber nicht unbedingt Video.</string>
 </resources>
