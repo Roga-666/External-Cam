@@ -9,7 +9,6 @@ import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import android.os.Build
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -151,17 +150,15 @@ class MetaUsbPassiveProbe(
         }
         awaitingPermission = true
         onState(MetaProbeState.WaitingPermission)
-        // Android must fill EXTRA_PERMISSION_GRANTED and EXTRA_DEVICE in the response.
-        // Restrict the mutable PendingIntent to our own app's private receiver.
-        val flags =
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        // Android's USB permission API officially supports immutable PendingIntents.
+        // A mutable PendingIntent with a package-only (non-component) Intent is rejected
+        // on Android 14+; keep the response app-scoped and immutable instead.
         val permissionIntent =
             PendingIntent.getBroadcast(
                 context,
                 4381,
                 Intent(permissionAction).setPackage(context.packageName),
-                flags,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         try {
             usbManager.requestPermission(device, permissionIntent)
