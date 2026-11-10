@@ -20,22 +20,18 @@ The independent Android application ID is `com.roga666.externalcam`, so External
 
 **GitHub Releases are intentionally blocked until the signing secrets are configured.** This prevents publishing unsigned APKs that cannot update cleanly.
 
-Create and securely back up a keystore **on your own computer** (never commit it or share its passwords):
+**Recommended on Vegapunk:** the App-Store repository includes a dedicated one-time setup helper for this eighth app, `scripts/setup-external-cam-signing.sh`. Run it from `~/App-Store` after pulling the latest changes. The script creates or reuses `~/roga-android-signing/External-Cam-release.p12`, then securely installs the required four GitHub Actions secrets into **this** repository without exposing your password in the chat.
 
-```bash
-keytool -genkeypair -v -keystore external-cam-release.jks -alias externalcam -keyalg RSA -keysize 3072 -validity 10000
-```
-
-In GitHub repository **Settings → Secrets and variables → Actions**, configure these four repository secrets:
-
-| Secret | Value |
+| Repository secret | Purpose |
 | --- | --- |
-| `KEYSTORE_B64` | Base64 encoding of the `.jks` file (one line) |
-| `KEYSTORE_PASSWORD` | Keystore password |
-| `KEY_ALIAS` | Key alias (`externalcam` in the example) |
-| `KEY_PASSWORD` | Alias/key password |
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | Permanent PKCS12 signing keystore |
+| `ANDROID_RELEASE_STORE_PASSWORD` | Keystore password |
+| `ANDROID_RELEASE_KEY_ALIAS` | Key alias (normally `release`) |
+| `ANDROID_RELEASE_KEY_PASSWORD` | Alias password |
 
-To generate the Base64 value locally on Linux, run `base64 -w0 external-cam-release.jks` and copy the output directly into the GitHub secret. **Back up the .jks and passwords offline:** loss of this key means installed release users cannot receive normal updates signed by a replacement key.
+The workflow also accepts the older `KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` aliases as a fallback.
+
+**Do not commit or share signing keys or passwords. Back up the local `.p12` and its password separately.** These are needed for every future in-place APK update.
 
 A tag `v*` (for example `v0.1.0`) triggers tests, builds and verifies a signed release APK, and attaches it as `External-Cam-v0.1.0.apk`.
 
