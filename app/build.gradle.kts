@@ -140,17 +140,16 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
 }
 
-// ui-test-manifest above is debugImplementation-only (Google's own convention: it injects a
-// throwaway ComponentActivity host into the *debug* merged manifest for createComposeRule(),
-// and must never ship in release). That means the release variant's merged manifest has no
-// host activity, so any test using createComposeRule() (ViewerScreenTest) fails under
-// testReleaseUnitTest with "Unable to resolve activity for ... ComponentActivity" — not a
-// real regression, just the release variant lacking a manifest entry it's not supposed to
-// have. Exclude only that Compose-UI-test class; every other unit test (Filenames, Settings,
-// ViewerViewModel, GalleryViewModel, ...) still runs against the release/minified classes.
+// ui-test-manifest above is debugImplementation-only (Google's convention: it injects a
+// test-only ComponentActivity host for createComposeRule()). The release variant does not
+// include this activity by design. The Compose UI tests in ViewerScreenTest and
+// GalleryScreenTest therefore cannot launch on the release variant under Robolectric;
+// all those tests DO execute on debug. Keep release JVM model/controller tests active,
+// while preserving the production release manifest without an artificial test activity.
 tasks.withType<Test>().matching { it.name == "testReleaseUnitTest" }.configureEach {
     filter {
         excludeTestsMatching("com.muh.usbcameraviewer.viewer.ViewerScreenTest")
+        excludeTestsMatching("com.muh.usbcameraviewer.gallery.GalleryScreenTest")
         isFailOnNoMatchingTests = false
     }
 }
