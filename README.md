@@ -10,6 +10,7 @@
 - Photo capture, MP4 recording (optional phone microphone), in-app gallery
 - Resolution selection, rotate/mirror, pinch-to-zoom and pan, brightness/contrast
 - **USB diagnostics:** Settings displays connected USB devices, vendor/product IDs, and whether Android detects a UVC video interface. You can refresh the list after plugging in a device.
+- **Accessible offline troubleshooting (v0.1.2):** Gallery and Settings icons appear even on the "Plug in your camera" screen. The empty state has a USB diagnostics button, and the diagnostics section is the first section in Settings. No camera connection is needed to open diagnostics.
 - **Improved composite-camera detection (v0.1.1):** Probe each USB interface directly, including valid class-0 UVC devices previously ignored by the bundled AUSBC camera filter. Also rescan devices already connected at startup or after returning to the app.
 - Fully offline; no analytics, ads, or internet permission
 

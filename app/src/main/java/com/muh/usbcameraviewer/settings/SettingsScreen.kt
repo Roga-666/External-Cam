@@ -76,6 +76,43 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            // Put diagnostics first so they are immediately available after using
+            // the no-camera USB diagnostics shortcut.
+            SectionLabel(stringResource(R.string.settings_usb_diagnostics))
+            Text(
+                stringResource(R.string.settings_usb_diagnostics_hint),
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(
+                onClick = { usbDevices = connectedUsbDevices(context) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(stringResource(R.string.settings_usb_refresh))
+            }
+            if (usbDevices.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_usb_empty),
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            usbDevices.forEach { device ->
+                val uvcStatus =
+                    if (device.isLikelyUvc) {
+                        stringResource(R.string.settings_usb_uvc_found)
+                    } else {
+                        stringResource(R.string.settings_usb_uvc_not_found)
+                    }
+                ListItem(
+                    headlineContent = { Text(device.displayName) },
+                    supportingContent = {
+                        Text(stringResource(R.string.settings_usb_device_details, device.usbId, uvcStatus))
+                    },
+                )
+            }
+            HorizontalDivider()
+
             SectionLabel(stringResource(R.string.settings_resolution_policy))
             RadioRow(
                 label = stringResource(R.string.settings_resolution_remember),
@@ -133,41 +170,6 @@ fun SettingsScreen(
             LaunchedEffect(prefix) {
                 kotlinx.coroutines.delay(400) // debounce
                 if (prefix != settings.filenamePrefix) viewModel.setFilenamePrefix(prefix)
-            }
-            HorizontalDivider()
-
-            SectionLabel(stringResource(R.string.settings_usb_diagnostics))
-            Text(
-                stringResource(R.string.settings_usb_diagnostics_hint),
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedButton(
-                onClick = { usbDevices = connectedUsbDevices(context) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Text(stringResource(R.string.settings_usb_refresh))
-            }
-            if (usbDevices.isEmpty()) {
-                Text(
-                    stringResource(R.string.settings_usb_empty),
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            usbDevices.forEach { device ->
-                val uvcStatus =
-                    if (device.isLikelyUvc) {
-                        stringResource(R.string.settings_usb_uvc_found)
-                    } else {
-                        stringResource(R.string.settings_usb_uvc_not_found)
-                    }
-                ListItem(
-                    headlineContent = { Text(device.displayName) },
-                    supportingContent = {
-                        Text(stringResource(R.string.settings_usb_device_details, device.usbId, uvcStatus))
-                    },
-                )
             }
             HorizontalDivider()
 
