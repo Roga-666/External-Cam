@@ -1,6 +1,7 @@
 name: Signed Release
 
 on:
+  workflow_dispatch:
   push:
     # One-time first release triggered by merging the bootstrap file to main.
     # Later normal code changes will not publish releases.
