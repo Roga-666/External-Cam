@@ -9,6 +9,8 @@ class FakeCameraController : CameraController {
 
     val openCalls = mutableListOf<Pair<Any, Resolution?>>()
     val resolutionCalls = mutableListOf<Resolution>()
+    val yuyvCalls = mutableListOf<Resolution>()
+    var yuyvSupported = false
     val rotationCalls = mutableListOf<Int>()
     val mirrorCalls = mutableListOf<Boolean>()
     val recordingStarts = mutableListOf<Triple<File, Boolean, Int>>()
@@ -60,6 +62,12 @@ class FakeCameraController : CameraController {
 
     override suspend fun setResolution(resolution: Resolution) {
         resolutionCalls += resolution
+    }
+
+    override suspend fun retryWithYuyv(resolution: Resolution): Boolean {
+        yuyvCalls += resolution
+        if (yuyvSupported) previewLive = true
+        return yuyvSupported
     }
 
     override fun setRotation(degrees: Int) {

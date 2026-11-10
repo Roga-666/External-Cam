@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">USB Camera Viewer</string>
+    <string name="app_name">External Cam</string>
     <string name="no_device_title">Kamera anschließen</string>
     <string name="no_device_body">Verbinde ein USB-Endoskop über einen USB-C-Adapter (OTG-Adapter). Die App startet automatisch, sobald eine Kamera erkannt wird.</string>
     <string name="permission_needed_title">USB-Berechtigung erforderlich</string>
@@ -53,8 +53,15 @@
     <string name="settings_filename_prefix">Dateinamen-Präfix</string>
     <string name="settings_keep_screen_on">Bildschirm bei Anzeige eingeschaltet lassen</string>
     <string name="settings_about">Über</string>
-    <string name="settings_about_body">USB Camera Viewer %1$s — von muh. Vollständig offline; keine Daten verlassen dein Gerät. UVC-Unterstützung über die Open-Source-Bibliothek AUSBC (Apache-2.0).</string>
+    <string name="settings_about_body">External Cam %1$s — basierend auf USB Camera Viewer von muh. Vollständig offline; keine Daten verlassen dein Gerät. UVC-Unterstützung über die Open-Source-Bibliothek AUSBC (Apache-2.0).</string>
     <string name="settings_licenses">Open-Source-Lizenzen</string>
     <string name="licenses_title">Open-Source-Lizenzen</string>
     <string name="licenses_intro">Diese App enthält die folgenden Open-Source-Komponenten. Ihre Lizenztexte sind unten vollständig wiedergegeben.</string>
+    <string name="settings_usb_diagnostics">USB-Diagnose</string>
+    <string name="settings_usb_diagnostics_hint">Prüfen Sie, welche USB-Geräte Android erkennt. Eine UVC-Schnittstelle ist ein Hinweis, aber keine Garantie für eine funktionierende Videoübertragung.</string>
+    <string name="settings_usb_refresh">USB-Geräte aktualisieren</string>
+    <string name="settings_usb_empty">Keine USB-Geräte erkannt. Bitte prüfen Sie USB-C-Kabel, OTG-Adapter und Stromversorgung.</string>
+    <string name="settings_usb_uvc_found">UVC-Videoschnittstelle erkannt</string>
+    <string name="settings_usb_uvc_not_found">Keine UVC-Videoschnittstelle erkannt</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>

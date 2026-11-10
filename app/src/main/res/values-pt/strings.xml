@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">USB Camera Viewer</string>
+    <string name="app_name">External Cam</string>
     <string name="no_device_title">Conecte sua câmera</string>
     <string name="no_device_body">Conecte um endoscópio USB com um adaptador USB-C (OTG). O aplicativo inicia automaticamente quando uma câmera é detectada.</string>
     <string name="permission_needed_title">Permissão USB necessária</string>
@@ -53,8 +53,15 @@
     <string name="settings_filename_prefix">Prefixo do nome do arquivo</string>
     <string name="settings_keep_screen_on">Manter a tela ligada durante a visualização</string>
     <string name="settings_about">Sobre</string>
-    <string name="settings_about_body">USB Camera Viewer %1$s — por muh. Totalmente offline; nenhum dado sai do seu dispositivo. Suporte a UVC pela biblioteca de código aberto AUSBC (Apache-2.0).</string>
+    <string name="settings_about_body">External Cam %1$s — baseado em USB Camera Viewer de muh. Totalmente offline; nenhum dado sai do seu dispositivo. Suporte a UVC pela biblioteca de código aberto AUSBC (Apache-2.0).</string>
     <string name="settings_licenses">Licenças de código aberto</string>
     <string name="licenses_title">Licenças de código aberto</string>
     <string name="licenses_intro">Este aplicativo inclui os seguintes componentes de código aberto. Os textos das licenças estão reproduzidos na íntegra abaixo.</string>
+    <string name="settings_usb_diagnostics">Diagnóstico USB</string>
+    <string name="settings_usb_diagnostics_hint">Verifique quais dispositivos USB o Android detecta. Uma interface UVC é um bom sinal, mas não garante a transmissão de vídeo.</string>
+    <string name="settings_usb_refresh">Atualizar dispositivos USB</string>
+    <string name="settings_usb_empty">Nenhum dispositivo USB detectado. Verifique o cabo USB-C, o adaptador OTG e a alimentação.</string>
+    <string name="settings_usb_uvc_found">Interface de vídeo UVC detectada</string>
+    <string name="settings_usb_uvc_not_found">Nenhuma interface de vídeo UVC detectada</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>

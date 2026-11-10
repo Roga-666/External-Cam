@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">USB Camera Viewer</string>
+    <string name="app_name">External Cam</string>
     <string name="no_device_title">Branchez votre caméra</string>
     <string name="no_device_body">Connectez un endoscope USB avec un adaptateur USB-C (OTG). L\'application démarre automatiquement dès qu\'une caméra est détectée.</string>
     <string name="permission_needed_title">Autorisation USB requise</string>
@@ -53,8 +53,15 @@
     <string name="settings_filename_prefix">Préfixe du nom de fichier</string>
     <string name="settings_keep_screen_on">Garder l\'écran allumé pendant l\'affichage</string>
     <string name="settings_about">À propos</string>
-    <string name="settings_about_body">USB Camera Viewer %1$s — par muh. Entièrement hors ligne ; aucune donnée ne quitte votre appareil. Prise en charge UVC via la bibliothèque open source AUSBC (Apache-2.0).</string>
+    <string name="settings_about_body">External Cam %1$s — basé sur USB Camera Viewer de muh. Entièrement hors ligne ; aucune donnée ne quitte votre appareil. Prise en charge UVC via la bibliothèque open source AUSBC (Apache-2.0).</string>
     <string name="settings_licenses">Licences open source</string>
     <string name="licenses_title">Licences open source</string>
     <string name="licenses_intro">Cette application intègre les composants open source suivants. Les textes de leurs licences sont reproduits intégralement ci-dessous.</string>
+    <string name="settings_usb_diagnostics">Diagnostic USB</string>
+    <string name="settings_usb_diagnostics_hint">Consultez les appareils USB détectés par Android. Une interface UVC est encourageante, mais ne garantit pas la diffusion vidéo.</string>
+    <string name="settings_usb_refresh">Actualiser les appareils USB</string>
+    <string name="settings_usb_empty">Aucun appareil USB détecté. Vérifiez le câble USB-C, votre adaptateur OTG et la source électrique.</string>
+    <string name="settings_usb_uvc_found">Interface vidéo UVC détectée</string>
+    <string name="settings_usb_uvc_not_found">Aucune interface vidéo UVC détectée</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>

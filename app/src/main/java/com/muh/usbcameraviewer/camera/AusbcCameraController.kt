@@ -517,35 +517,43 @@ class AusbcCameraController
             lastLivenessSamples = null
         }
 
-        override suspend fun setResolution(resolution: Resolution): Unit =
+        override suspend fun setResolution(resolution: Resolution) {
+            withContext(Dispatchers.IO) { setResolutionBlocking(resolution) }
+        }
+
+        override suspend fun retryWithYuyv(resolution: Resolution): Boolean =
             withContext(Dispatchers.IO) {
-                setResolutionBlocking(resolution)
+                setResolutionBlocking(resolution, forceYuyv = true)
             }
 
-        private fun setResolutionBlocking(resolution: Resolution) {
-            // AUSBC 3.2.7's own resize paths are unusable: updateResolution() crashes (null
-            // SurfaceTexture) and its getSuitableSize() collapses every request to 640x480 (it
-            // returns the first advertised size that is EITHER the exact request OR 640x480, and
-            // 640x480 is usually listed first). So drive the underlying UVCCamera directly:
-            // stop, set the exact size (prefer MJPEG for high-res, fall back to YUYV), restart.
-            val cam = camera ?: return
-            val uvc = uvcCameraOf(cam) ?: return
+        /**
+         * Some UVC cameras accept MJPEG configuration but subsequently never deliver frames.
+         * The ViewModel detects the dead stream and requests one forced YUYV retry before
+         * reverting to the last working resolution. Forced retries do not emit an OpenFailed
+         * event; the ViewModel owns the retry/revert flow.
+         */
+        private fun setResolutionBlocking(
+            resolution: Resolution,
+            forceYuyv: Boolean = false,
+        ): Boolean {
+            val uvc = camera?.let(::uvcCameraOf) ?: return false
             val device = pendingDevice
             val surface = previewView?.surfaceTexture
-            runCatching {
+            return runCatching {
                 uvc.stopPreview()
-                val ok =
-                    runCatching {
-                        uvc.setPreviewSize(
-                            resolution.width,
-                            resolution.height,
-                            UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
-                            UVCCamera.DEFAULT_PREVIEW_MAX_FPS,
-                            UVCCamera.FRAME_FORMAT_MJPEG,
-                            PREVIEW_BANDWIDTH,
-                        )
-                    }.isSuccess
-                if (!ok) {
+                val mjpegConfigured =
+                    !forceYuyv &&
+                        runCatching {
+                            uvc.setPreviewSize(
+                                resolution.width,
+                                resolution.height,
+                                UVCCamera.DEFAULT_PREVIEW_MIN_FPS,
+                                UVCCamera.DEFAULT_PREVIEW_MAX_FPS,
+                                UVCCamera.FRAME_FORMAT_MJPEG,
+                                PREVIEW_BANDWIDTH,
+                            )
+                        }.isSuccess
+                if (!mjpegConfigured) {
                     uvc.setPreviewSize(
                         resolution.width,
                         resolution.height,
@@ -555,17 +563,20 @@ class AusbcCameraController
                         PREVIEW_BANDWIDTH,
                     )
                 }
-                // stopPreview() detaches the native preview window; re-attach the surface before
-                // restarting or startPreview logs "window does not exist" and stays black.
                 if (surface != null) uvc.setPreviewTexture(surface)
                 uvc.startPreview()
+                lastLivenessSamples = null
                 currentSize = resolution
                 applyPreviewTransform(resolution)
                 if (device != null) {
                     _events.tryEmit(CameraEvent.Opened(device.displayName(), resolution, availableSizes))
                 }
-            }.onFailure {
-                _events.tryEmit(CameraEvent.OpenFailed("resolution change failed"))
+                true
+            }.getOrElse {
+                if (!forceYuyv) {
+                    _events.tryEmit(CameraEvent.OpenFailed("resolution change failed"))
+                }
+                false
             }
         }
 

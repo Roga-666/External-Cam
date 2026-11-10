@@ -238,29 +238,30 @@ class ViewerViewModel
             controller.requestPermission()
         }
 
+        /** Allow a new USB preview time to deliver frames before judging a mode unusable. */
+        private suspend fun waitForLivePreview(): Boolean {
+            repeat(RESOLUTION_VERIFY_TRIES) {
+                delay(RESOLUTION_VERIFY_STEP_MS)
+                if (controller.isPreviewLive()) return true
+            }
+            return false
+        }
+
         fun onSelectResolution(resolution: Resolution) {
-            // The native stop/setSize/start renegotiates the USB stream and can take a second; run
-            // it off the main thread so the UI never freezes. Some cameras advertise a mode they
-            // cannot actually stream (e.g. 1080p) and deliver a black frame — after switching, verify
-            // the preview is live and, if not, revert to the previous resolution with a message.
             val s = _state.value as? CameraUiState.Streaming ?: return
             val previous = s.resolution
-            // Mid-record the stop/start renegotiation would freeze seconds of the file, and a
-            // second switch while one is renegotiating would drive the UVC stream concurrently.
             if (previous == resolution || s.isRecording || _switchingResolution.value) return
             _switchingResolution.value = true
             viewModelScope.launch {
                 try {
                     controller.setResolution(resolution)
                     settingsRepository.setLastResolution(resolution)
-                    // Poll for the first frame: a working stream clears the spinner in a few hundred
-                    // ms; a mode the camera can't deliver stays black until the deadline, then reverts.
-                    var live = false
-                    var tries = 0
-                    while (tries < RESOLUTION_VERIFY_TRIES && !live) {
-                        delay(RESOLUTION_VERIFY_STEP_MS)
-                        live = controller.isPreviewLive()
-                        tries++
+                    var live = waitForLivePreview()
+                    // A device can accept MJPEG setPreviewSize yet stream no frames. Retry
+                    // the same resolution explicitly in YUYV before dropping back to the last
+                    // working mode. Only a live stream counts as a successful fallback.
+                    if (!live && controller.retryWithYuyv(resolution)) {
+                        live = waitForLivePreview()
                     }
                     if (!live) {
                         _messages.tryEmit(ViewerMessage.ResolutionUnsupported(resolution))

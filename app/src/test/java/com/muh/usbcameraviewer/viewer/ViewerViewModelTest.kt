@@ -13,9 +13,11 @@ import com.muh.usbcameraviewer.capture.CaptureStore
 import com.muh.usbcameraviewer.capture.StorageChecker
 import com.muh.usbcameraviewer.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,6 +48,7 @@ class FakeStorageChecker(var available: Long = Long.MAX_VALUE) : StorageChecker 
     override fun availableBytes(): Long = available
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ViewerViewModelTest {
     @get:Rule val mainDispatcher = MainDispatcherRule()
 
@@ -189,6 +192,28 @@ class ViewerViewModelTest {
             // Switched to the requested size, then reverted to the previous one.
             assertEquals(listOf(res1080, res720), fake.resolutionCalls)
             assertEquals(res720, settings.settings.first().lastResolution)
+        }
+
+    @Test
+    fun `dead MJPEG stream switches to working YUYV mode instead of reverting`() =
+        runTest {
+            val settings = settingsRepo()
+            val vm =
+                ViewerViewModel(fake, settings, FakeCaptureStore(tmp.root), storage) {
+                    error("no view in unit test")
+                }
+            fake.emit(CameraEvent.Attached("Endoscope"))
+            fake.emit(CameraEvent.PermissionGranted("Endoscope"))
+            fake.emit(CameraEvent.Opened("Endoscope", res720, listOf(res720, res1080)))
+            fake.previewLive = false
+            fake.yuyvSupported = true
+            vm.onSelectResolution(res1080)
+            // The YUYV retry only happens after the eight delayed no-frame probes.
+            // Advance the virtual test clock before checking the eventual result.
+            advanceUntilIdle()
+            assertEquals(listOf(res1080), fake.resolutionCalls)
+            assertEquals(listOf(res1080), fake.yuyvCalls)
+            assertEquals(res1080, settings.settings.first().lastResolution)
         }
 
     @Test
