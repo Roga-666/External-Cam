@@ -309,33 +309,35 @@ fun ViewerContent(
                 )
         }
 
-        // The streaming toolbar already has these controls. Keep gallery and settings
-        // reachable when no camera is attached, permission is pending, or opening fails.
-        // This is especially important for diagnosing USB devices from the empty state.
-        if (state !is CameraUiState.Streaming) {
-            Row(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .systemBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = callbacks.onOpenGallery) {
-                    Icon(
-                        Icons.Filled.PhotoLibrary,
-                        contentDescription = stringResource(R.string.cd_open_gallery),
-                        tint = Color.White,
-                    )
-                }
-                IconButton(onClick = callbacks.onOpenSettings) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = stringResource(R.string.cd_open_settings),
-                        tint = Color.White,
-                    )
-                }
-            }
+        // Streaming has its own toolbar; disconnected and error states need navigation too.
+        if (state !is CameraUiState.Streaming) ViewerIdleActions(callbacks)
+    }
+}
+
+/** Gallery and Settings are always available, even without a recognized USB camera. */
+@Composable
+private fun BoxScope.ViewerIdleActions(callbacks: ViewerCallbacks) {
+    Row(
+        Modifier
+            .align(Alignment.TopEnd)
+            .systemBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = callbacks.onOpenGallery) {
+            Icon(
+                Icons.Filled.PhotoLibrary,
+                contentDescription = stringResource(R.string.cd_open_gallery),
+                tint = Color.White,
+            )
+        }
+        IconButton(onClick = callbacks.onOpenSettings) {
+            Icon(
+                Icons.Filled.Settings,
+                contentDescription = stringResource(R.string.cd_open_settings),
+                tint = Color.White,
+            )
         }
     }
 }
