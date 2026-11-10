@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Quality gates
-        run: ./gradlew test detekt ktlintCheck lint
+        run: ./gradlew test detekt ktlintCheck lint :app:assembleRelease
 
       - name: Upload test reports on failure
         if: failure()
