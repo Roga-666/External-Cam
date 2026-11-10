@@ -10,6 +10,7 @@
 - Photo capture, MP4 recording (optional phone microphone), in-app gallery
 - Resolution selection, rotate/mirror, pinch-to-zoom and pan, brightness/contrast
 - **USB diagnostics:** Settings displays connected USB devices, vendor/product IDs, and whether Android detects a UVC video interface. You can refresh the list after plugging in a device.
+- **Meta retail read-only USB test (v0.1.3):** For a connected 2833:00A0 Hammerhead Retail Demo, manually request USB permission and probe bulk IN 0x81 for up to three seconds (max 32 KiB). Does not issue ATC commands, read from bulk OUT, set a configuration, modify firmware, log payloads or serial numbers, or save the received bytes. Silence does **not** disprove a live camera feed: the proprietary protocol may require a documented handshake.
 - **Accessible offline troubleshooting (v0.1.2):** Gallery and Settings icons appear even on the "Plug in your camera" screen. The empty state has a USB diagnostics button, and the diagnostics section is the first section in Settings. No camera connection is needed to open diagnostics.
 - **Improved composite-camera detection (v0.1.1):** Probe each USB interface directly, including valid class-0 UVC devices previously ignored by the bundled AUSBC camera filter. Also rescan devices already connected at startup or after returning to the app.
 - Fully offline; no analytics, ads, or internet permission

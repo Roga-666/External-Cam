@@ -64,4 +64,14 @@
     <string name="settings_usb_uvc_found">UVC video interface detected</string>
     <string name="settings_usb_uvc_not_found">No UVC video interface detected</string>
     <string name="settings_usb_device_details">%1$s · %2$s</string>
+    <string name="meta_probe_title">Meta retail USB test</string>
+    <string name="meta_probe_hint">Read-only diagnostic for the ATC USB interface. Disconnect from the demo tablet first. This briefly claims the USB interface without sending device commands, changing firmware, or saving received data.</string>
+    <string name="meta_probe_button">Test incoming USB data (3 seconds)</string>
+    <string name="meta_probe_waiting">Allow Android USB access to start the test.</string>
+    <string name="meta_probe_running">Reading bulk IN endpoint 0x81 without sending commands…</string>
+    <string name="meta_probe_missing">The Meta retail USB device or its ATC interface is no longer available.</string>
+    <string name="meta_probe_denied">USB access was not granted.</string>
+    <string name="meta_probe_error">Could not open or claim the USB interface.</string>
+    <string name="meta_probe_silent">No incoming data received. This does not rule out video: the device may wait for an initialization command.</string>
+    <string name="meta_probe_received">Received %1$d bytes in %2$d reads. This confirms incoming USB data, not necessarily video.</string>
 </resources>

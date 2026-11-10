@@ -111,6 +111,11 @@ fun SettingsScreen(
                     },
                 )
             }
+            // Explicitly requested, receive-only test for the exact retail demo VID/PID.
+            // Never probe other USB devices or run a background scan.
+            if (usbDevices.any { it.vendorId == 0x2833 && it.productId == 0x00A0 }) {
+                MetaUsbProbePanel()
+            }
             HorizontalDivider()
 
             SectionLabel(stringResource(R.string.settings_resolution_policy))
