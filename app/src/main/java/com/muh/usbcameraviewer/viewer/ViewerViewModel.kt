@@ -214,6 +214,9 @@ class ViewerViewModel
          * Connecting. If the surface was disposed and recreated, onPreviewReady handles the re-open.
          */
         fun onAppForegrounded() {
+            // When a cable was attached while the app was backgrounded, rescan instead
+            // of waiting indefinitely for an attach broadcast that may have been missed.
+            if (_state.value is CameraUiState.NoDevice) controller.requestPermission()
             val preview = pendingPreview
             if (_state.value is CameraUiState.Connecting && preview != null) {
                 openPreview(preview)

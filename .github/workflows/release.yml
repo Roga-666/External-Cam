@@ -3,12 +3,12 @@ name: Signed Release
 on:
   workflow_dispatch:
   push:
-    # One-time first release triggered by merging the bootstrap file to main.
-    # Later normal code changes will not publish releases.
+    # A deliberate version bump publishes a new signed APK automatically.
+    # Tag push releases still work for manually tagged versions.
     branches: [main]
     tags: ["v*"]
     paths:
-      - docs/first-release-trigger.md
+      - app/build.gradle.kts
 
 permissions:
   contents: write
@@ -32,11 +32,25 @@ jobs:
       - name: Resolve release tag
         run: |
           if [ "$GITHUB_REF_TYPE" = "branch" ]; then
-            RELEASE_TAG="v0.1.0"
+            VERSION="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Unable to identify versionName in app/build.gradle.kts"
+              exit 1
+            fi
+            RELEASE_TAG="v$VERSION"
           else
             RELEASE_TAG="$GITHUB_REF_NAME"
           fi
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+
+      - name: Prevent accidental overwrite of published versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists. Increment versionName and versionCode."
+            exit 1
+          fi
 
       # A different signature would prevent in-place Android updates.
       # Never publish a release artifact unless the permanent signing key is configured.

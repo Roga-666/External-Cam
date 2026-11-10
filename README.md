@@ -10,6 +10,7 @@
 - Photo capture, MP4 recording (optional phone microphone), in-app gallery
 - Resolution selection, rotate/mirror, pinch-to-zoom and pan, brightness/contrast
 - **USB diagnostics:** Settings displays connected USB devices, vendor/product IDs, and whether Android detects a UVC video interface. You can refresh the list after plugging in a device.
+- **Improved composite-camera detection (v0.1.1):** Probe each USB interface directly, including valid class-0 UVC devices previously ignored by the bundled AUSBC camera filter. Also rescan devices already connected at startup or after returning to the app.
 - Fully offline; no analytics, ads, or internet permission
 
 USB diagnostics can identify a device but **cannot guarantee** that the bundled UVC engine can stream from it. This initial version still uses AUSBC 3.2.7.
@@ -33,7 +34,7 @@ The workflow also accepts the older `KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_AL
 
 **Do not commit or share signing keys or passwords. Back up the local `.p12` and its password separately.** These are needed for every future in-place APK update.
 
-A tag `v*` (for example `v0.1.0`) triggers tests, builds and verifies a signed release APK, and attaches it as `External-Cam-v0.1.0.apk`.
+A deliberate `versionName` and `versionCode` increase in `app/build.gradle.kts`, merged to `main`, automatically triggers tests, the signed release build, and a new GitHub Release. The release workflow also supports manual `v*` tags. Never reuse an existing version or signing key.
 
 Local build: `./gradlew :app:assembleDebug` for development, or `./build.sh release --gates` with a local keystore configured. **Debug APKs use a different signature and cannot update installed release APKs.**
 
