@@ -12,9 +12,11 @@ import android.graphics.Matrix
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.callback.ICameraStateCallBack
-import com.jiangdg.ausbc.callback.IDeviceConnectCallBack
+import com.jiangdg.ausbc.utils.CameraUtils
 import com.jiangdg.ausbc.camera.bean.CameraRequest
 import com.jiangdg.ausbc.widget.AspectRatioTextureView
 import com.serenegiant.usb.USBMonitor
@@ -35,7 +37,7 @@ import javax.inject.Singleton
  * USBMonitor (inside libausbc 3.2.7) registers its USB-permission receiver with the
  * two-argument `registerReceiver`, which throws SecurityException on Android 14+
  * (targetSdk 34+) because the filter contains a non-system action. Wrapping the
- * Context handed to [MultiCameraClient] fixes this without touching the library.
+ * Context handed to [USBMonitor] fixes this without touching the library.
  * NOT_EXPORTED is safe: the filter's system broadcasts (USB attach/detach) are
  * delivered regardless, and the permission broadcast originates from this app's
  * own PendingIntent.
@@ -229,7 +231,10 @@ class AusbcCameraController
         private val _events = MutableSharedFlow<CameraEvent>(extraBufferCapacity = 16)
         override val events: SharedFlow<CameraEvent> = _events
 
-        private var client: MultiCameraClient? = null
+        // AUSBC 3.2.7's MultiCameraClient filters out some class-0 composite UVC cameras.
+        // Own the USB discovery/permission monitor while retaining its camera streaming engine.
+        private var monitor: USBMonitor? = null
+        private val mainHandler = Handler(Looper.getMainLooper())
 
         // 3.2.7 has no CameraUVC subclass; MultiCameraClient.Camera is concrete and UVC-capable.
         private var camera: MultiCameraClient.Camera? = null
@@ -286,88 +291,136 @@ class AusbcCameraController
                 view.getBitmap(width, height)
             }
 
+        /** Recognize video interfaces even when the USB device itself is composite class 0. */
+        private fun isCameraDevice(device: UsbDevice): Boolean =
+            isLikelyUvcDevice(
+                device.deviceClass,
+                (0 until device.interfaceCount).map { device.getInterface(it).interfaceClass },
+            ) || CameraUtils.isFilterDevice(context, device)
+
+        /**
+         * Proactively enumerate attached devices. USB broadcasts are not always delivered
+         * to apps already open, and the stock AUSBC filtering drops some valid UVC cameras.
+         */
+        private fun scanAttachedCameras() {
+            if (pendingDevice != null) return
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return
+            usbManager.deviceList.values
+                .firstOrNull(::isCameraDevice)
+                ?.let(::selectCamera)
+        }
+
+        private fun selectCamera(device: UsbDevice) {
+            if (!isCameraDevice(device)) return
+            val current = pendingDevice
+            if (current != null) return
+            pendingDevice = device
+            _events.tryEmit(CameraEvent.Attached(device.displayName()))
+            monitor?.requestPermission(device)
+        }
+
         override fun startMonitoring() {
-            if (client != null) return
+            if (monitor != null) return
             if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
                 _events.tryEmit(CameraEvent.NoUsbHost)
                 return
             }
-            // 3.2.7: IDeviceConnectCallBack is a top-level callback interface
-            // (com.jiangdg.ausbc.callback), not nested in MultiCameraClient.
-            client =
-                MultiCameraClient(
+            // Use USBMonitor directly: MultiCameraClient's hard-coded isUsbCamera() only
+            // checks video-class device descriptors and VIDEO interfaces on class-239
+            // devices. Many valid UVC devices report device class 0 instead.
+            monitor =
+                USBMonitor(
                     ReceiverFlagContext(context),
-                    object : IDeviceConnectCallBack {
-                        override fun onAttachDev(device: UsbDevice?) {
-                            device ?: return
-                            // A second camera attaching while one is pending/active must not
-                            // hijack the session; it becomes usable after the first detaches.
-                            val current = pendingDevice
-                            if (current != null && device.deviceName != current.deviceName) return
-                            pendingDevice = device
-                            _events.tryEmit(CameraEvent.Attached(device.displayName()))
-                            client?.requestPermission(device)
+                    object : USBMonitor.OnDeviceConnectListener {
+                        override fun onAttach(device: UsbDevice?) {
+                            if (device == null || !isCameraDevice(device)) return
+                            mainHandler.post { if (monitor != null) selectCamera(device) }
                         }
 
-                        override fun onDetachDec(device: UsbDevice?) {
-                            if (device == pendingDevice) {
+                        override fun onDetach(device: UsbDevice?) {
+                            device ?: return
+                            mainHandler.post {
+                                if (pendingDevice?.deviceName != device.deviceName) return@post
                                 teardownCamera()
-                                // Device is truly gone: the control block is now stale.
                                 ctrlBlock = null
                                 pendingDevice = null
                                 _events.tryEmit(CameraEvent.Detached)
+                                scanAttachedCameras()
                             }
                         }
 
-                        override fun onConnectDev(
+                        override fun onConnect(
                             device: UsbDevice?,
-                            ctrlBlock: USBMonitor.UsbControlBlock?,
+                            block: USBMonitor.UsbControlBlock?,
+                            createNew: Boolean,
                         ) {
                             device ?: return
-                            this@AusbcCameraController.ctrlBlock = ctrlBlock
-                            _events.tryEmit(CameraEvent.PermissionGranted(device.displayName()))
-                        }
-
-                        override fun onDisConnectDec(
-                            device: UsbDevice?,
-                            ctrlBlock: USBMonitor.UsbControlBlock?,
-                        ) {
-                            // USBMonitor fires onDisconnect for EVERY UsbControlBlock close —
-                            // including the clone the library closes inside closeCamera() while the
-                            // device is still plugged in (navigating to settings/gallery). Treating
-                            // that as an unplug dropped the control block and stranded the UI on
-                            // "plug in your camera". Only a device actually gone from the USB bus is
-                            // a real detach; otherwise keep the block so the next open() reconnects.
-                            if (!shouldTreatDisconnectAsDetach(pendingDevice?.deviceName, attachedUsbDeviceNames())) {
-                                return
+                            mainHandler.post {
+                                if (pendingDevice?.deviceName != device.deviceName) return@post
+                                ctrlBlock = block
+                                _events.tryEmit(CameraEvent.PermissionGranted(device.displayName()))
                             }
-                            teardownCamera()
-                            // Device disconnected: drop the stale control block.
-                            this@AusbcCameraController.ctrlBlock = null
-                            _events.tryEmit(CameraEvent.Detached)
                         }
 
-                        override fun onCancelDev(device: UsbDevice?) {
+                        override fun onDisconnect(
+                            device: UsbDevice?,
+                            block: USBMonitor.UsbControlBlock?,
+                        ) {
+                            mainHandler.post {
+                                // The library may close a cloned control block while the
+                                // physical camera remains connected. That is not a detach.
+                                if (pendingDevice?.deviceName != device?.deviceName) return@post
+                                if (!shouldTreatDisconnectAsDetach(
+                                        pendingDevice?.deviceName,
+                                        attachedUsbDeviceNames(),
+                                    )
+                                ) {
+                                    return@post
+                                }
+                                teardownCamera()
+                                ctrlBlock = null
+                                pendingDevice = null
+                                _events.tryEmit(CameraEvent.Detached)
+                                scanAttachedCameras()
+                            }
+                        }
+
+                        override fun onCancel(device: UsbDevice?) {
                             device ?: return
-                            // Permission cancelled: no valid control block for this device.
-                            ctrlBlock = null
-                            _events.tryEmit(CameraEvent.PermissionDenied(device.displayName()))
+                            mainHandler.post {
+                                if (pendingDevice?.deviceName != device.deviceName) return@post
+                                ctrlBlock = null
+                                _events.tryEmit(CameraEvent.PermissionDenied(device.displayName()))
+                            }
                         }
                     },
                 )
-            client?.register()
+            monitor?.register()
+            scanAttachedCameras()
         }
 
         override fun stopMonitoring() {
             teardownCamera()
-            client?.unRegister()
-            client?.destroy()
-            client = null
+            val oldMonitor = monitor
+            monitor = null
+            oldMonitor?.unregister()
+            oldMonitor?.destroy()
+            pendingDevice = null
+            ctrlBlock = null
         }
 
         override fun requestPermission() {
-            val device = pendingDevice ?: return
-            client?.requestPermission(device)
+            if (monitor == null) return
+            val device = pendingDevice
+            if (device == null) {
+                scanAttachedCameras()
+            } else if (device.deviceName in attachedUsbDeviceNames()) {
+                monitor?.requestPermission(device)
+            } else {
+                pendingDevice = null
+                ctrlBlock = null
+                scanAttachedCameras()
+            }
         }
 
         override fun open(
