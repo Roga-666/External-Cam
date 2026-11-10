@@ -173,7 +173,6 @@ fun SettingsScreen(
             }
             HorizontalDivider()
 
-
             SectionLabel(stringResource(R.string.settings_about))
             Text(
                 stringResource(R.string.settings_about_body, BuildConfig.VERSION_NAME),
