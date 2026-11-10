@@ -57,4 +57,11 @@
     <string name="settings_licenses">Open-Source-Lizenzen</string>
     <string name="licenses_title">Open-Source-Lizenzen</string>
     <string name="licenses_intro">Diese App enthält die folgenden Open-Source-Komponenten. Ihre Lizenztexte sind unten vollständig wiedergegeben.</string>
+    <string name="settings_usb_diagnostics">USB-Diagnose</string>
+    <string name="settings_usb_diagnostics_hint">Prüfen Sie, welche USB-Geräte Android erkennt. Eine UVC-Schnittstelle ist ein Hinweis, aber keine Garantie für eine funktionierende Videoübertragung.</string>
+    <string name="settings_usb_refresh">USB-Geräte aktualisieren</string>
+    <string name="settings_usb_empty">Keine USB-Geräte erkannt. Bitte prüfen Sie USB-C-Kabel, OTG-Adapter und Stromversorgung.</string>
+    <string name="settings_usb_uvc_found">UVC-Videoschnittstelle erkannt</string>
+    <string name="settings_usb_uvc_not_found">Keine UVC-Videoschnittstelle erkannt</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>

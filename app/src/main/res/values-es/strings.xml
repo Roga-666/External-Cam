@@ -57,4 +57,11 @@
     <string name="settings_licenses">Licencias de código abierto</string>
     <string name="licenses_title">Licencias de código abierto</string>
     <string name="licenses_intro">Esta aplicación incluye los siguientes componentes de código abierto. Sus textos de licencia se reproducen íntegramente a continuación.</string>
+    <string name="settings_usb_diagnostics">Diagnóstico USB</string>
+    <string name="settings_usb_diagnostics_hint">Comprueba qué dispositivos USB detecta Android. Una interfaz UVC es una buena señal, pero no garantiza que funcione la transmisión de vídeo.</string>
+    <string name="settings_usb_refresh">Actualizar dispositivos USB</string>
+    <string name="settings_usb_empty">No se detectaron dispositivos USB. Comprueba el cable USB-C, el adaptador OTG y la alimentación.</string>
+    <string name="settings_usb_uvc_found">Interfaz de vídeo UVC detectada</string>
+    <string name="settings_usb_uvc_not_found">No se detectó ninguna interfaz de vídeo UVC</string>
+    <string name="settings_usb_device_details">%1$s · %2$s</string>
 </resources>
